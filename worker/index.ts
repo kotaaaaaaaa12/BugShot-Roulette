@@ -73,7 +73,7 @@ async function derivePassword(password: string, salt: Uint8Array): Promise<strin
       name: "PBKDF2",
       hash: "SHA-256",
       salt: salt as unknown as BufferSource,
-      iterations: 210_000,
+      iterations: 100_000,
     },
     material,
     256,
