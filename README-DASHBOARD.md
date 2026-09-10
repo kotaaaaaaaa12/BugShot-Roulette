@@ -21,3 +21,6 @@ Workers Static Assets, but deleting the whole `functions` directory avoids confu
 
 After the first deployment, open the automatically created D1 database in the
 Cloudflare dashboard, open Console, paste all of `schema.sql`, and click Execute.
+
+Worker logs and traces are persisted at a 100% sampling rate. Open the deployed
+Worker and select Observability in the Cloudflare dashboard to inspect them.

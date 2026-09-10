@@ -1,6 +1,6 @@
 /// <reference types="@cloudflare/workers-types" />
 
-import { Container } from "@cloudflare/containers";
+import { Container, getContainer } from "@cloudflare/containers";
 
 interface Env {
   GAME_SERVER: DurableObjectNamespace<GameServer>;
@@ -328,7 +328,7 @@ export default {
       pathname === "/socket.io" ||
       pathname.startsWith("/socket.io/")
     ) {
-      return env.GAME_SERVER.getByName("global-game-server-v1").fetch(request);
+      return getContainer(env.GAME_SERVER, "global-game-server-v1").fetch(request);
     }
 
     return env.ASSETS.fetch(request);
