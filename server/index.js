@@ -23,9 +23,7 @@ app.use((req, res, next) => {
     next();
 });
 
-// --- HUGGING FACE & REVERSE PROXY LAYER CONFIGURATION ---
-// Hugging Face Spaces route dynamic client traffic through layered reverse proxies.
-// Trusting proxies allows the Express core engine to correctly read downstream headers (IPs, proto upgrades).
+// Reverse proxy configuration for Cloudflare Workers and Containers.
 app.set('trust proxy', true);
 
 const allowedOriginsEnv = process.env.ALLOWED_ORIGINS;
@@ -33,8 +31,7 @@ const allowedOrigins = allowedOriginsEnv ? allowedOriginsEnv.split(',') : [];
 
 const corsOptions = {
     origin: (origin, callback) => {
-        // Broad capture to allow local servers, matching environment origins, Hugging Face iframe deployments, or Discord Activity client
-        if (!origin || allowedOrigins.includes(origin) || allowedOriginsEnv === "*" || origin.includes('.hf.space') || origin.includes('localhost:') || origin.includes('127.0.0.1:') || origin.includes('.discordsays.com') || origin.includes('.pages.dev')) {
+        if (!origin || allowedOrigins.includes(origin) || allowedOriginsEnv === "*" || origin.includes('localhost:') || origin.includes('127.0.0.1:') || origin.includes('.pages.dev') || origin.includes('.workers.dev')) {
             callback(null, true);
         } else {
             callback(new Error('Blocked by Security Framework: Unauthorized Origin Connection'));
@@ -47,111 +44,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// --- SECURE UPSTASH REDIS TUNNEL PROXY ---
-const REDIS_URL = process.env.UPSTASH_REDIS_REST_URL;
-const REDIS_TOKEN = process.env.UPSTASH_REDIS_REST_TOKEN;
-
-if (!REDIS_URL || !REDIS_TOKEN) {
-    console.warn("[WARN] UPSTASH_REDIS_REST_URL or UPSTASH_REDIS_REST_TOKEN environment variables are missing. Redis-backed features will be unavailable until they are configured.");
-}
-
-// --- SHARED REDIS PROXY HANDLERS ---
-const handleRedisProxy = async (req, res) => {
-    if (!REDIS_URL || !REDIS_TOKEN) {
-        return res.status(503).json({ error: 'Maybe Aadish Forget to do something? idk message him.' });
-    }
-
-    try {
-        const response = await fetch(REDIS_URL, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${REDIS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(req.body)
-        });
-        const data = await response.json();
-        res.status(response.status).json(data);
-    } catch (err) {
-        console.error("Redis proxy error:", err);
-        res.status(500).json({ error: err.message });
-    }
-};
-
-const handleRedisPipelineProxy = async (req, res) => {
-    if (!REDIS_URL || !REDIS_TOKEN) {
-        return res.status(503).json({ error: 'Maybe Aadish Forget to do something? idk message him.' });
-    }
-
-    try {
-        const response = await fetch(`${REDIS_URL}/pipeline`, {
-            method: 'POST',
-            headers: {
-                Authorization: `Bearer ${REDIS_TOKEN}`,
-                'Content-Type': 'application/json'
-            },
-            body: JSON.stringify(req.body)
-        });
-        const data = await response.json();
-        res.status(response.status).json(data);
-    } catch (err) {
-        console.error("Redis pipeline proxy error:", err);
-        res.status(500).json({ error: err.message });
-    }
-};
-
-app.post('/redis', handleRedisProxy);
-app.post('/redis/pipeline', handleRedisPipelineProxy);
-
-// Aliased routes for Discord Activity proxy (client calls /api/redis when in Discord)
-app.post('/api/redis', handleRedisProxy);
-app.post('/api/redis/pipeline', handleRedisPipelineProxy);
-
-// --- DISCORD EMBEDDED ACTIVITY OAUTH TOKEN EXCHANGE ---
-app.post('/api/token', async (req, res) => {
-    try {
-        const { code } = req.body;
-        if (!code) {
-            return res.status(400).json({ error: 'Authorization code is required' });
-        }
-
-        const clientId = process.env.DISCORD_CLIENT_ID;
-
-        if (!clientId) {
-            console.error("DISCORD_CLIENT_ID environment variable is missing!");
-            return res.status(500).json({ error: 'Server configuration error: client ID missing' });
-        }
-        const clientSecret = process.env.DISCORD_CLIENT_SECRET;
-
-        if (!clientSecret) {
-            console.error("DISCORD_CLIENT_SECRET environment variable is missing!");
-            return res.status(500).json({ error: 'Server configuration error: client secret missing' });
-        }
-
-        const response = await fetch('https://discord.com/api/oauth2/token', {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/x-www-form-urlencoded'
-            },
-            body: new URLSearchParams({
-                client_id: clientId,
-                client_secret: clientSecret,
-                grant_type: 'authorization_code',
-                code: code
-            }).toString()
-        });
-
-        const data = await response.json();
-        if (!response.ok) {
-            return res.status(response.status).json(data);
-        }
-
-        res.json({ access_token: data.access_token });
-    } catch (err) {
-        console.error("Discord token exchange error:", err);
-        res.status(500).json({ error: err.message });
-    }
-});
+// Account, statistics, and leaderboard storage are handled by the Worker D1 API.
 
 // Analytics Metric Storage Vitals
 const serverStartTime = Date.now();
@@ -178,7 +71,7 @@ const httpServer = createServer(app);
 const io = new Server(httpServer, {
     cors: {
         origin: allowedOriginsEnv === "*" ? true : (origin, callback) => {
-            if (!origin || allowedOrigins.includes(origin) || origin.includes('.hf.space') || origin.includes('localhost:') || origin.includes('.discordsays.com') || origin.includes('.pages.dev')) {
+            if (!origin || allowedOrigins.includes(origin) || origin.includes('localhost:') || origin.includes('.pages.dev') || origin.includes('.workers.dev')) {
                 callback(null, true);
             } else {
                 callback(null, false);
@@ -671,7 +564,7 @@ const joinSocketToRoom = (socket, room, playerName, authId) => {
         const existingPlayerIndex = room.players.findIndex(p => p.authId && p.authId === cleanAuthId && !p.disconnected);
         if (existingPlayerIndex !== -1) {
             const oldPlayer = room.players[existingPlayerIndex];
-            console.log(`[RECONNECT] Player ${oldPlayer.name} (authId: ${cleanAuthId}) reconnected. Updating socket ID from ${oldPlayer.id} to ${socket.id}`);
+            console.log(`[RECONNECT] Player ${oldPlayer.name} reconnected. Updating socket ID from ${oldPlayer.id} to ${socket.id}`);
             
             // If the old socket is still connected (ghost connection), leave and emit warning
             const oldSocket = io.sockets.sockets.get(oldPlayer.id);

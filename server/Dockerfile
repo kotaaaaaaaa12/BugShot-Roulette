@@ -1,21 +1,15 @@
-# Production Dockerfile for Bugshot-Roulette Server
-FROM node:18-slim
+FROM node:22-slim
 
-# Create app directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Install app dependencies
 COPY package*.json ./
-RUN npm install --production
+RUN npm ci --omit=dev
 
-# Bundle app source
 COPY . .
 
-# Expose port
-EXPOSE 7860
-
-# Production environment
 ENV NODE_ENV=production
+ENV PORT=3001
 
-# Run the server
-CMD [ "node", "index.js" ]
+EXPOSE 3001
+
+CMD ["node", "index.js"]

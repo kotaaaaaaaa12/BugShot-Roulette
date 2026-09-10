@@ -6,8 +6,6 @@ import { SocketBatcher } from '../utils/socketOptimizer';
 const params = new URLSearchParams(window.location.search);
 const isDiscord = params.has('frame_id') || params.has('instance_id') || window.location.search.includes('platform=') || window.location.hostname.includes('discordsays.com');
 const isLocal = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-const HF_BACKEND = import.meta.env.VITE_HF_BACKEND_URL || 'https://yoakatsuki-buckshot.hf.space';
-
 // REST API goes through proxy; Socket.io connects directly to HF in production for native WebSocket
 const REST_SERVER_URL = isDiscord
     ? window.location.origin + '/server'
@@ -18,12 +16,8 @@ const getSocketConfig = () => {
     if (isLocal) {
         return { socketUrl: 'http://localhost:3001', socketPath: '/socket.io' };
     }
-    if (isDiscord) {
-        return { socketUrl: window.location.origin, socketPath: '/server/socket.io' };
-    }
-    // Production: bypass Cloudflare HTTP proxy for WebSocket — avoids long-polling fallback latency
     return {
-        socketUrl: import.meta.env.VITE_SOCKET_URL || HF_BACKEND,
+        socketUrl: window.location.origin,
         socketPath: '/socket.io'
     };
 };
@@ -52,6 +46,8 @@ const loadSavedSettings = () => {
 
 const getAuthId = (): string | null => {
     try {
+        const token = localStorage.getItem('aadish_roulette_auth_token');
+        if (token) return token;
         const saved = localStorage.getItem('aadish_roulette_logged_in_user');
         if (saved) {
             const parsed = JSON.parse(saved);
@@ -386,3 +382,4 @@ export function useMultiplayer() {
         setOnFullSyncRequest
     };
 }
+

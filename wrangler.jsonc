@@ -1,0 +1,56 @@
+{
+  "$schema": "./node_modules/wrangler/config-schema.json",
+  "name": "bugshot-roulette",
+  "main": "worker/index.ts",
+  "compatibility_date": "2026-09-10",
+  "compatibility_flags": ["nodejs_compat"],
+  "assets": {
+    "directory": "./dist",
+    "binding": "ASSETS",
+    "run_worker_first": [
+      "/api/*",
+      "/health",
+      "/server",
+      "/server/*",
+      "/socket.io",
+      "/socket.io/*"
+    ],
+    "not_found_handling": "single-page-application"
+  },
+  "vars": {
+    "ALLOWED_ORIGINS": "*"
+  },
+  "d1_databases": [
+    {
+      "binding": "DB"
+    }
+  ],
+  "containers": [
+    {
+      "class_name": "GameServer",
+      "image": "./server/Dockerfile",
+      "max_instances": 1,
+      "instance_type": "lite",
+      "constraints": {
+        "regions": ["APAC"]
+      }
+    }
+  ],
+  "durable_objects": {
+    "bindings": [
+      {
+        "name": "GAME_SERVER",
+        "class_name": "GameServer"
+      }
+    ]
+  },
+  "migrations": [
+    {
+      "tag": "v1",
+      "new_sqlite_classes": ["GameServer"]
+    }
+  ],
+  "observability": {
+    "enabled": true
+  }
+}
