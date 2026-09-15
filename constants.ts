@@ -34,6 +34,7 @@ const getInitialSettings = (): GameSettings => {
   
   if (isAndroid || isMobile) {
     return {
+      language: 'auto',
       pixelScale: 3.5,
       brightness: 1.0,
       uiScale: 0.50,
@@ -48,6 +49,7 @@ const getInitialSettings = (): GameSettings => {
   } else {
     // PC
     return {
+      language: 'auto',
       pixelScale: 3.0,
       brightness: 1.0,
       uiScale: 0.8,
@@ -66,4 +68,3 @@ export const DEFAULT_SETTINGS: GameSettings = getInitialSettings();
 
 export const GAME_VERSION = '1.5.0';
 export const ANNOUNCEMENT_VERSION = '1';
-

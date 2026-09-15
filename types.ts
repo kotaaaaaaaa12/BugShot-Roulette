@@ -152,6 +152,7 @@ export interface AnimationState {
 }
 
 export interface GameSettings {
+  language?: 'auto' | 'en' | 'ja';
   pixelScale: number;
   brightness: number;
   uiScale: number;

@@ -7,6 +7,7 @@ import { useDealerAI } from './hooks/useDealerAI';
 import { SettingsMenu } from './components/SettingsMenu';
 import { GameSettings } from './types';
 import { DEFAULT_SETTINGS } from './constants';
+import { initializeI18n, setLanguagePreference } from './utils/i18n';
 import { DiscordSDK } from '@discord/embedded-app-sdk';
 
 import { LoadingScreen } from './components/LoadingScreen';
@@ -279,8 +280,11 @@ export default function App() {
   useEffect(() => {
     localStorage.setItem('aadish_roulette_settings', JSON.stringify(settings));
     audioManager.updateVolumes(settings);
+    setLanguagePreference(settings.language || 'auto');
 
   }, [settings]);
+
+  useEffect(() => initializeI18n(), []);
 
   // Handle Music Logic
   useEffect(() => {

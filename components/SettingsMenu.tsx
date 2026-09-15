@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { GameSettings } from '../types';
-import { X, Monitor, Scaling, Eye, RotateCcw, LogOut } from 'lucide-react';
+import { X, Monitor, Scaling, Eye, RotateCcw, LogOut, Languages } from 'lucide-react';
 
 interface SettingsMenuProps {
     settings: GameSettings;
@@ -114,6 +114,37 @@ export const SettingsMenu: React.FC<SettingsMenuProps> = ({ settings, onUpdateSe
                 </div>
 
                 <div className="flex-1 overflow-y-auto p-2.5 sm:p-5 space-y-3 sm:space-y-5 custom-scrollbar">
+
+                    {/* Language Group */}
+                    <div className="space-y-3">
+                        <div className="flex items-center gap-2">
+                            <Languages size={13} className="text-stone-500" />
+                            <h3 className="text-stone-500 font-extrabold tracking-[0.2em] uppercase text-[9px] sm:text-[10px]">Language</h3>
+                            <div className="h-[1px] flex-1 bg-stone-800/30" />
+                        </div>
+                        <div className="grid grid-cols-3 gap-2 p-1.5 bg-stone-950/65 border border-stone-700/70 rounded-xl">
+                            {([
+                                ['auto', 'Auto'],
+                                ['en', 'English'],
+                                ['ja', '日本語']
+                            ] as const).map(([value, label]) => (
+                                <button
+                                    key={value}
+                                    type="button"
+                                    onClick={() => handleChange('language', value)}
+                                    className={`py-2 text-[9px] sm:text-[10px] font-black tracking-widest transition-all rounded-lg border active:scale-95 cursor-pointer ${(settings.language || 'auto') === value
+                                        ? 'bg-red-950/20 text-red-400 border-red-800/50 shadow-[0_0_12px_rgba(220,38,38,0.2)]'
+                                        : 'bg-transparent text-stone-400 border-stone-850 hover:bg-stone-900/60'
+                                    }`}
+                                >
+                                    {label}
+                                </button>
+                            ))}
+                        </div>
+                        <p className="text-[8px] sm:text-[9px] text-stone-500 font-bold uppercase tracking-wider">
+                            Auto follows your browser language. Japanese is used for Japanese browsers; all other languages use English.
+                        </p>
+                    </div>
 
                     {/* Visuals Group */}
                     <div className="space-y-3 sm:space-y-4">
