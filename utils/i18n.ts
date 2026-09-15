@@ -1,7 +1,32 @@
+import { japaneseExtended, japanesePatterns } from './i18nJa';
+
 export type LanguagePreference = 'auto' | 'en' | 'ja';
 export type ResolvedLanguage = 'en' | 'ja';
 
 const SETTINGS_KEY = 'aadish_roulette_settings';
+
+const metadataByLanguage: Record<ResolvedLanguage, {
+  title: string;
+  description: string;
+  socialTitle: string;
+  socialDescription: string;
+  locale: string;
+}> = {
+  en: {
+    title: 'Bugshot Roulette - The Ultimate Game of Chance',
+    description: 'Play Bugshot Roulette - A high-stakes tabletop horror game where strategy meets luck. Inspired by Buckshot Roulette. Features 3D graphics, multiplayer, and intense item mechanics.',
+    socialTitle: 'Bugshot Roulette - A Deadly Game of Chance',
+    socialDescription: 'High-stakes tabletop horror game with 3D graphics, strategic items, and multiplayer. Play now!',
+    locale: 'en_US',
+  },
+  ja: {
+    title: 'Bugshot Roulette - 運と戦略のテーブルゲーム',
+    description: '運と戦略が交差する3Dテーブルゲーム。マルチプレイと多彩なアイテムに対応しています。',
+    socialTitle: 'Bugshot Roulette - 運と戦略のゲーム',
+    socialDescription: '3Dグラフィック、多彩なアイテム、マルチプレイに対応したブラウザゲーム。',
+    locale: 'ja_JP',
+  },
+};
 
 const japanese: Record<string, string> = {
   'SETTINGS': '設定',
@@ -192,6 +217,8 @@ const japanese: Record<string, string> = {
   'Database request failed': 'データベースへの接続に失敗しました'
 };
 
+Object.assign(japanese, japaneseExtended);
+
 const patterns: Array<[RegExp, (...values: string[]) => string]> = [
   [/^WAKING UP SERVER\.\.\. \(ATTEMPT (\d+)\/(\d+)\)$/i, (attempt, max) => `サーバーを起動中…（${attempt}/${max}回目）`],
   [/^(\d+) PLAYERS? ONLINE$/i, (count) => `${count}人がオンライン`],
@@ -202,6 +229,8 @@ const patterns: Array<[RegExp, (...values: string[]) => string]> = [
   [/^(.+) JOINED THE LOBBY$/i, (name) => `${name}がロビーに参加しました`],
   [/^(.+) LEFT THE LOBBY$/i, (name) => `${name}がロビーから退出しました`]
 ];
+
+patterns.push(...japanesePatterns);
 
 let preference: LanguagePreference = 'auto';
 let observer: MutationObserver | null = null;
@@ -223,7 +252,8 @@ export function resolveLanguage(value: LanguagePreference = preference): Resolve
   return navigator.language.toLowerCase().startsWith('ja') ? 'ja' : 'en';
 }
 
-function translate(source: string): string {
+export function translateText(source: string, language: ResolvedLanguage = resolveLanguage()): string {
+  if (language === 'en') return source;
   const leading = source.match(/^\s*/)?.[0] || '';
   const trailing = source.match(/\s*$/)?.[0] || '';
   const clean = source.trim();
@@ -249,7 +279,7 @@ function localizeText(node: Text, language: ResolvedLanguage) {
   if (saved) {
     source = current === saved.translated ? saved.source : current;
   }
-  const translated = translate(source);
+  const translated = translateText(source, language);
   if (translated !== source) {
     originals.set(node, { source, translated });
     if (current !== translated) node.nodeValue = translated;
@@ -257,7 +287,7 @@ function localizeText(node: Text, language: ResolvedLanguage) {
 }
 
 function localizeAttributes(element: Element, language: ResolvedLanguage) {
-  const names = ['placeholder', 'title', 'aria-label'];
+  const names = ['placeholder', 'title', 'aria-label', 'alt'];
   let saved = attributeOriginals.get(element);
   for (const name of names) {
     const current = element.getAttribute(name);
@@ -273,7 +303,7 @@ function localizeAttributes(element: Element, language: ResolvedLanguage) {
     }
     const source = saved.get(name) || current;
     saved.set(name, source);
-    const translated = translate(source);
+    const translated = translateText(source, language);
     if (translated !== current) element.setAttribute(name, translated);
   }
 }
@@ -292,7 +322,16 @@ function localizeTree(root: Node) {
 
 function refresh() {
   scheduled = false;
-  document.documentElement.lang = resolveLanguage();
+  const language = resolveLanguage();
+  const metadata = metadataByLanguage[language];
+  document.documentElement.lang = language;
+  document.title = metadata.title;
+  document.querySelector<HTMLMetaElement>('meta[name="description"]')?.setAttribute('content', metadata.description);
+  document.querySelector<HTMLMetaElement>('meta[property="og:title"]')?.setAttribute('content', metadata.socialTitle);
+  document.querySelector<HTMLMetaElement>('meta[property="og:description"]')?.setAttribute('content', metadata.socialDescription);
+  document.querySelector<HTMLMetaElement>('meta[property="og:locale"]')?.setAttribute('content', metadata.locale);
+  document.querySelector<HTMLMetaElement>('meta[name="twitter:title"]')?.setAttribute('content', metadata.socialTitle);
+  document.querySelector<HTMLMetaElement>('meta[name="twitter:description"]')?.setAttribute('content', metadata.socialDescription);
   localizeTree(document.body);
 }
 
@@ -317,7 +356,7 @@ export function initializeI18n() {
       subtree: true,
       characterData: true,
       attributes: true,
-      attributeFilter: ['placeholder', 'title', 'aria-label']
+      attributeFilter: ['placeholder', 'title', 'aria-label', 'alt']
     });
   }
   const handleLanguageChange = () => preference === 'auto' && scheduleRefresh();
