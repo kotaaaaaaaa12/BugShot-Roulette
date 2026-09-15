@@ -23,6 +23,7 @@ import { MultiplayerSelection } from './components/MultiplayerSelection';
 import { generateLootBatch, resolveJackpotOutcome } from './utils/game/inventory';
 import { randomInt } from './utils/gameUtils';
 import { ShellType, ItemType, TurnOwner, AimTarget } from './types';
+import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, phaseForOwner } from './utils/multiplayerSeats';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -474,10 +475,15 @@ export default function App() {
       // Mirror has no target picker, so bind it to the same absolute opponent on every client.
       if (item === 'MIRROR' && isMultiPlayerSeat && !targetPlayerId) {
         const playersList = mp.room?.players || [];
-        const myIndex = playersList.findIndex((p: any) => p.id === (mp.playerId || ''));
-        if (myIndex !== -1) {
-          targetPlayerId = playersList[(myIndex + 2) % playersList.length]?.id;
-        }
+        const myId = mp.playerId || '';
+        const hpByOwner: Record<TurnOwner, number> = {
+          PLAYER: spGame.player.hp,
+          PLAYER3: spGame.player3.hp,
+          DEALER: spGame.dealer.hp,
+          PLAYER4: spGame.player4.hp,
+        };
+        const targetOwner = nextAliveOwner('PLAYER', playersList.length, owner => hpByOwner[owner]);
+        targetPlayerId = ownerToPlayerId(targetOwner, myId, playersList);
       }
 
       if (item === 'DECK_CARD') {
@@ -497,20 +503,8 @@ export default function App() {
           const playersList = mp.room?.players || [];
           const myId = mp.playerId || '';
           
-          const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner => {
-            if (targetPlayerId === localPlayerId) return 'PLAYER';
-            const myIndex = players.findIndex(p => p.id === localPlayerId);
-            const size = players.length;
-            if (myIndex === -1) return 'DEALER';
-            const frontOpponent = players[(myIndex + 2) % size];
-            const leftOpponent = players[(myIndex + 1) % size];
-            const rightOpponent = size >= 4 ? players[(myIndex + 3) % size] : null;
-            
-            if (frontOpponent && targetPlayerId === frontOpponent.id) return 'DEALER';
-            if (leftOpponent && targetPlayerId === leftOpponent.id) return 'PLAYER3';
-            if (rightOpponent && targetPlayerId === rightOpponent.id) return 'PLAYER4';
-            return 'DEALER';
-          };
+          const resolveTargetOwner = (targetId: string, localId: string, players: any[]): TurnOwner =>
+            normalizePlayerReference(targetId, localId, players);
 
           const targetOwner = targetPlayerId ? resolveTargetOwner(targetPlayerId, myId, playersList) : 'DEALER';
           const targetState = targetOwner === 'PLAYER3' ? spGame.player3 : (targetOwner === 'PLAYER4' ? spGame.player4 : spGame.dealer);
@@ -593,6 +587,15 @@ export default function App() {
       const cards = spGame.gameState.deckCards;
       const chosenCard = cards ? cards[index] : null;
       const cardRandoms: any = {};
+      const playerCount = mp.room?.players?.length || 2;
+      const getStateByOwner = (owner: TurnOwner) => {
+        if (owner === 'PLAYER') return spGame.player;
+        if (owner === 'PLAYER3') return spGame.player3;
+        if (owner === 'PLAYER4') return spGame.player4;
+        return spGame.dealer;
+      };
+      const cardTargetOwner = nextAliveOwner('PLAYER', playerCount, owner => getStateByOwner(owner).hp);
+      const cardTargetItems = getStateByOwner(cardTargetOwner).items;
 
       if (chosenCard) {
         if (chosenCard.name === 'The Magician') {
@@ -601,13 +604,12 @@ export default function App() {
             'CHOKE', 'REMOTE', 'BIG_INVERTER', 'CONTRACT', 'LUCKYCHARM', 'FLASHBANG',
             'CRUSHER', 'TOTEM', 'MIRROR', 'DECK_CARD', 'JACKPOT'
           ];
-          const playerCount = mp.room?.players?.length || 2;
           const filteredItems = playerCount <= 2 ? ITEMS.filter(item => item !== 'REMOTE') : ITEMS;
           cardRandoms.magicianItem = filteredItems[Math.floor(Math.random() * filteredItems.length)];
         } else if (chosenCard.name === 'Judgment') {
           cardRandoms.judgmentSuccess = Math.random() < 0.5;
         } else if (chosenCard.name === 'The Moon') {
-          const oppItems = spGame.dealer.items;
+          const oppItems = cardTargetItems;
           const stealableIndices = [];
           for (let i = 0; i < oppItems.length; i++) {
             if (oppItems[i] !== null && oppItems[i] !== 'TOTEM' && oppItems[i] !== 'JACKPOT') {
@@ -629,7 +631,7 @@ export default function App() {
             cardRandoms.deathIndex = destructibleIndices[Math.floor(Math.random() * destructibleIndices.length)];
           }
         } else if (chosenCard.name === 'The Tower') {
-          const oppItems = spGame.dealer.items;
+          const oppItems = cardTargetItems;
           const destructibleIndices = [];
           for (let i = 0; i < oppItems.length; i++) {
             if (oppItems[i] !== null && oppItems[i] !== 'TOTEM') {
@@ -637,7 +639,7 @@ export default function App() {
             }
           }
           if (destructibleIndices.length > 0) {
-            cardRandoms.towerIndex = destructibleIndices[Math.floor(Math.random() * destructibleIndices.length)];
+            cardRandoms.towerIndex = Math.floor(Math.random() * destructibleIndices.length);
           }
         } else if (chosenCard.name === 'Wheel of Fortune') {
           const chamber = [...spGame.gameState.chamber];
@@ -705,50 +707,8 @@ export default function App() {
           const playersList = mp.room?.players || [];
           const myId = mp.playerId || '';
 
-          const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner => {
-            if (!targetPlayerId) return 'DEALER';
-            if (targetPlayerId === localPlayerId) return 'PLAYER';
-
-            const size = players?.length || 0;
-            const myIndex = players ? players.findIndex(p => p.id === localPlayerId) : -1;
-            if (myIndex === -1 || size < 2) return 'DEALER';
-
-            let absoluteId = targetPlayerId;
-            if (['PLAYER', 'PLAYER3', 'PLAYER4', 'DEALER'].includes(targetPlayerId)) {
-              if (targetPlayerId === 'PLAYER') {
-                absoluteId = localPlayerId;
-              } else if (targetPlayerId === 'DEALER') {
-                absoluteId = players[(myIndex + 2) % size]?.id || localPlayerId;
-              } else if (targetPlayerId === 'PLAYER3') {
-                absoluteId = players[(myIndex + 1) % size]?.id || localPlayerId;
-              } else if (targetPlayerId === 'PLAYER4') {
-                absoluteId = players[(myIndex + (size === 4 ? 3 : 1)) % size]?.id || localPlayerId;
-              }
-            }
-
-            if (absoluteId === localPlayerId) return 'PLAYER';
-            const targetIndex = players.findIndex(p => p.id === absoluteId);
-            if (targetIndex === -1) return 'DEALER';
-
-            if (size === 2) {
-              return 'DEALER';
-            }
-
-            if (size === 3) {
-              if (targetIndex === (myIndex + 2) % 3) return 'DEALER';
-              if (targetIndex === (myIndex + 1) % 3) return 'PLAYER3';
-              return 'DEALER';
-            }
-
-            if (size >= 4) {
-              if (targetIndex === (myIndex + 2) % 4) return 'DEALER';
-              if (targetIndex === (myIndex + 1) % 4) return 'PLAYER3';
-              if (targetIndex === (myIndex + 3) % 4) return 'PLAYER4';
-              return 'DEALER';
-            }
-
-            return 'DEALER';
-          };
+          const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner =>
+            targetPlayerId ? normalizePlayerReference(targetPlayerId, localPlayerId, players) : 'DEALER';
 
           const getPlayerSetter = (owner: TurnOwner) => {
             if (owner === 'PLAYER') return spGame.setPlayer;
@@ -783,6 +743,9 @@ export default function App() {
                 break;
               case 'STEAL_ITEM':
                 spGame.stealItem(action.index, relSender);
+                break;
+              case 'SELECT_CARD':
+                await spGame.selectTarotCard(action.index, action.cardRandoms);
                 break;
               case 'HOVER_TARGET': {
                 let aim: AimTarget = action.target;
@@ -857,7 +820,7 @@ export default function App() {
                       const relWinner = action.gameState.winnerId ? resolveTargetOwner(action.gameState.winnerId, myId, playersList) : action.gameState.winner;
                       let nextPhase = action.gameState.phase;
                       if (action.gameState.phase === 'PLAYER_TURN' || action.gameState.phase === 'DEALER_TURN' || action.gameState.phase === 'PLAYER3_TURN' || action.gameState.phase === 'PLAYER4_TURN') {
-                        nextPhase = relTurnOwner === 'PLAYER' ? 'PLAYER_TURN' : (relTurnOwner === 'PLAYER3' ? 'PLAYER3_TURN' : (relTurnOwner === 'PLAYER4' ? 'PLAYER4_TURN' : 'DEALER_TURN'));
+                        nextPhase = phaseForOwner(relTurnOwner);
                       }
                       spGame.setGameState(prev => {
                         const targetPhase = (prev.phase === 'STEALING' && prev.turnOwner === 'PLAYER') ? 'STEALING' : nextPhase;
@@ -1109,20 +1072,8 @@ export default function App() {
         const isMulti = playerCount >= 3;
         const iAmHost = mp.playerId === room.hostId;
 
-        const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner => {
-          if (targetPlayerId === localPlayerId) return 'PLAYER';
-          const myIndex = players.findIndex(p => p.id === localPlayerId);
-          const size = players.length;
-          if (myIndex === -1) return 'DEALER';
-          const frontOpponent = players[(myIndex + 2) % size];
-          const leftOpponent = players[(myIndex + 1) % size];
-          const rightOpponent = size >= 4 ? players[(myIndex + 3) % size] : null;
-          
-          if (frontOpponent && targetPlayerId === frontOpponent.id) return 'DEALER';
-          if (leftOpponent && targetPlayerId === leftOpponent.id) return 'PLAYER3';
-          if (rightOpponent && targetPlayerId === rightOpponent.id) return 'PLAYER4';
-          return 'DEALER';
-        };
+        const resolveTargetOwner = (targetId: string, localId: string, players: any[]): TurnOwner =>
+          normalizePlayerReference(targetId, localId, players);
 
         if (isMulti) {
           const myIndex = room.players.findIndex((p: any) => p.id === mp.playerId);
@@ -1339,20 +1290,8 @@ export default function App() {
           const playerCount = mp.room?.players?.length || 2;
           const isMulti = playerCount >= 3;
 
-          const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner => {
-            if (targetPlayerId === localPlayerId) return 'PLAYER';
-            const myIndex = players.findIndex(p => p.id === localPlayerId);
-            const size = players.length;
-            if (myIndex === -1) return 'DEALER';
-            const frontOpponent = players[(myIndex + 2) % size];
-            const leftOpponent = players[(myIndex + 1) % size];
-            const rightOpponent = size >= 4 ? players[(myIndex + 3) % size] : null;
-            
-            if (frontOpponent && targetPlayerId === frontOpponent.id) return 'DEALER';
-            if (leftOpponent && targetPlayerId === leftOpponent.id) return 'PLAYER3';
-            if (rightOpponent && targetPlayerId === rightOpponent.id) return 'PLAYER4';
-            return 'DEALER';
-          };
+          const resolveTargetOwner = (targetId: string, localId: string, players: any[]): TurnOwner =>
+            normalizePlayerReference(targetId, localId, players);
 
           if (isMulti) {
             console.log(`Batch end detected (HOST, ${playerCount}-Player) - Generating new batch... keepTurn:`, keepTurn);

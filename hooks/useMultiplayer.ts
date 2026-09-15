@@ -81,6 +81,8 @@ export function useMultiplayer() {
     const socketBatcherRef = useRef<SocketBatcher | null>(null);
     const lastJoinRef = useRef<{ roomId: string; playerName: string } | null>(null);
     const playerNameRef = useRef<string>('');
+    const actionSequenceRef = useRef(0);
+    const receivedActionIdsRef = useRef<Set<string>>(new Set());
 
     // Callback for incoming actions
     const onActionRef = useRef<((data: { playerId: string, action: any }) => void) | null>(null);
@@ -211,6 +213,15 @@ export function useMultiplayer() {
         });
 
         newSocket.on('gameActionReceived', (data: { playerId: string, action: any }) => {
+            const actionId = data.action?._actionId;
+            if (actionId) {
+                if (receivedActionIdsRef.current.has(actionId)) return;
+                receivedActionIdsRef.current.add(actionId);
+                if (receivedActionIdsRef.current.size > 500) {
+                    const oldestId = receivedActionIdsRef.current.values().next().value;
+                    if (oldestId) receivedActionIdsRef.current.delete(oldestId);
+                }
+            }
             if (onActionRef.current) {
                 onActionRef.current(data);
             }
@@ -314,24 +325,32 @@ export function useMultiplayer() {
 
     const sendAction = (roomId: string, action: any) => {
         const activeSocket = socketRef.current || socket;
-        if (IMMEDIATE_ACTION_TYPES.has(action?.type)) {
+        const sequencedAction = action?._actionId ? action : {
+            ...action,
+            _actionId: `${activeSocket?.id || 'pending'}:${++actionSequenceRef.current}`,
+        };
+        if (IMMEDIATE_ACTION_TYPES.has(sequencedAction?.type)) {
             socketBatcherRef.current?.flush();
-            activeSocket?.emit('gameAction', { roomId, action });
+            activeSocket?.emit('gameAction', { roomId, action: sequencedAction });
             return;
         }
 
         if (socketBatcherRef.current && activeSocket?.connected) {
-            socketBatcherRef.current.queue('gameAction', { roomId, action });
+            socketBatcherRef.current.queue('gameAction', { roomId, action: sequencedAction });
         } else {
-            activeSocket?.emit('gameAction', { roomId, action });
+            activeSocket?.emit('gameAction', { roomId, action: sequencedAction });
         }
     };
 
     // Bypass batcher for latency-sensitive events (aim, shoot, state sync)
     const sendImmediateAction = (roomId: string, action: any) => {
         const activeSocket = socketRef.current || socket;
+        const sequencedAction = action?._actionId ? action : {
+            ...action,
+            _actionId: `${activeSocket?.id || 'pending'}:${++actionSequenceRef.current}`,
+        };
         socketBatcherRef.current?.flush();
-        activeSocket?.emit('gameAction', { roomId, action });
+        activeSocket?.emit('gameAction', { roomId, action: sequencedAction });
     };
 
     const kickPlayer = (roomId: string, targetPlayerId: string) => {
@@ -382,4 +401,3 @@ export function useMultiplayer() {
         setOnFullSyncRequest
     };
 }
-

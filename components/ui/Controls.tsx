@@ -143,11 +143,12 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                                         {frontOpponent && (
                                             <button
                                                 onClick={() => {
+                                                    if (frontOpponent.isAlive === false) return;
                                                     audioManager.playSound('click');
                                                     handleChooseOpponent('DEALER', 'OPPONENT', frontOpponent.id);
                                                 }}
-                                                disabled={isProcessing}
-                                                onMouseEnter={() => !isMobile && !isProcessing && onHoverTarget('OPPONENT', frontOpponent.id)}
+                                                disabled={isProcessing || frontOpponent.isAlive === false}
+                                                onMouseEnter={() => !isMobile && !isProcessing && frontOpponent.isAlive !== false && onHoverTarget('OPPONENT', frontOpponent.id)}
                                                 onMouseLeave={() => !isMobile && !isProcessing && onHoverTarget('CHOOSING')}
                                                 className={`${shootFrontBtnClass} w-full justify-center`}
                                             >
@@ -162,11 +163,12 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                                         {((size === 4 && leftOpponent) || (size === 3 && sidePos === 'left' && sideOpponent)) && (
                                             <button
                                                 onClick={() => {
+                                                    if ((size === 4 ? leftOpponent! : sideOpponent).isAlive === false) return;
                                                     audioManager.playSound('click');
                                                     handleChooseOpponent('PLAYER3', 'LEFT', (size === 4 ? leftOpponent! : sideOpponent).id);
                                                 }}
-                                                disabled={isProcessing}
-                                                onMouseEnter={() => !isMobile && !isProcessing && onHoverTarget('LEFT', (size === 4 ? leftOpponent! : sideOpponent).id)}
+                                                disabled={isProcessing || (size === 4 ? leftOpponent! : sideOpponent).isAlive === false}
+                                                onMouseEnter={() => !isMobile && !isProcessing && (size === 4 ? leftOpponent! : sideOpponent).isAlive !== false && onHoverTarget('LEFT', (size === 4 ? leftOpponent! : sideOpponent).id)}
                                                 onMouseLeave={() => !isMobile && !isProcessing && onHoverTarget('CHOOSING')}
                                                 className={`${shootFrontBtnClass} w-full justify-center`}
                                             >
@@ -196,11 +198,12 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                                         {((size === 4 && rightOpponent) || (size === 3 && sidePos === 'right' && sideOpponent)) && (
                                             <button
                                                 onClick={() => {
+                                                    if ((size === 4 ? rightOpponent! : sideOpponent).isAlive === false) return;
                                                     audioManager.playSound('click');
                                                     handleChooseOpponent(size === 4 ? 'PLAYER4' : 'PLAYER3', 'RIGHT', (size === 4 ? rightOpponent! : sideOpponent).id);
                                                 }}
-                                                disabled={isProcessing}
-                                                onMouseEnter={() => !isMobile && !isProcessing && onHoverTarget('RIGHT', (size === 4 ? rightOpponent! : sideOpponent).id)}
+                                                disabled={isProcessing || (size === 4 ? rightOpponent! : sideOpponent).isAlive === false}
+                                                onMouseEnter={() => !isMobile && !isProcessing && (size === 4 ? rightOpponent! : sideOpponent).isAlive !== false && onHoverTarget('RIGHT', (size === 4 ? rightOpponent! : sideOpponent).id)}
                                                 onMouseLeave={() => !isMobile && !isProcessing && onHoverTarget('CHOOSING')}
                                                 className={`${shootFrontBtnClass} w-full justify-center`}
                                             >

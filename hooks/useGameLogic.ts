@@ -7,6 +7,7 @@ import { audioManager } from '../utils/audioManager';
 import { performShot } from '../utils/game/shooting';
 import { distributeItems as distributeItemsAction, getRandomItem, resolveJackpotOutcome } from '../utils/game/inventory';
 import { MatchStats } from '../utils/statsManager';
+import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner } from '../utils/multiplayerSeats';
 
 export const useGameLogic = () => {
   // --- State ---
@@ -149,8 +150,10 @@ export const useGameLogic = () => {
       if (gameState.lastTurnWasSkipped) {
         setGameState(prev => ({ ...prev, lastTurnWasSkipped: false }));
       }
+      setAimTarget('IDLE');
+      setCameraView('PLAYER');
     }
-  }, [gameState.phase]);
+  }, [gameState.phase, gameState.turnOwner]);
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [knownShell, setKnownShell] = useState<ShellType | null>(null);
@@ -245,17 +248,18 @@ export const useGameLogic = () => {
 
   const getPlayerNameHelper = (owner: TurnOwner) => {
     if (owner === 'PLAYER') return playerName || 'YOU';
-    if (owner === 'DEALER') return getOpponentName();
     if (gameStateRef.current.multiplayerState?.players) {
       const players = gameStateRef.current.multiplayerState.players;
       const myId = gameStateRef.current.localPlayerId || '';
       const myIndex = players.findIndex((p: any) => p.id === myId);
       if (myIndex !== -1) {
-        const sideOpponent = players[(myIndex + 1) % 3];
-        if (sideOpponent) return sideOpponent.name;
+        const offset = owner === 'PLAYER3' ? 1 : owner === 'PLAYER4' ? 3 : 2;
+        const opponent = players[(myIndex + offset) % players.length];
+        if (opponent) return opponent.name;
       }
     }
-    return 'OPPONENT 2';
+    if (owner === 'DEALER') return getOpponentName();
+    return owner === 'PLAYER4' ? 'OPPONENT 3' : 'OPPONENT 2';
   };
 
   const addLog = (text: string, type: LogEntry['type'] = 'neutral') => {
@@ -266,14 +270,6 @@ export const useGameLogic = () => {
   const overlayHideTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    if (!gameState.isMultiplayer) {
-      if (overlayHideTimeoutRef.current) {
-        clearTimeout(overlayHideTimeoutRef.current);
-        overlayHideTimeoutRef.current = null;
-      }
-      return;
-    }
-
     if (overlayText) {
       if (overlayHideTimeoutRef.current) {
         clearTimeout(overlayHideTimeoutRef.current);
@@ -281,7 +277,7 @@ export const useGameLogic = () => {
       overlayHideTimeoutRef.current = setTimeout(() => {
         setOverlayText(null);
         overlayHideTimeoutRef.current = null;
-      }, 8000);
+      }, 4500);
     } else if (overlayHideTimeoutRef.current) {
       clearTimeout(overlayHideTimeoutRef.current);
       overlayHideTimeoutRef.current = null;
@@ -293,7 +289,7 @@ export const useGameLogic = () => {
         overlayHideTimeoutRef.current = null;
       }
     };
-  }, [overlayText, overlayTextUpdatedAt, gameState.isMultiplayer]);
+  }, [overlayText, overlayTextUpdatedAt]);
 
   const resetStats = () => {
     matchStatsRef.current = {
@@ -513,11 +509,8 @@ export const useGameLogic = () => {
       player4Dropping: false,
       player4Recovering: false
     });
-    let startCamView: CameraView = 'PLAYER';
-    if (turnOwnerOverride === 'DEALER') startCamView = 'DEALER';
-    else if (turnOwnerOverride === 'PLAYER3') startCamView = 'PLAYER3_GUN';
-    else if (turnOwnerOverride === 'PLAYER4') startCamView = 'PLAYER';
-    setCameraView(startCamView);
+    setAimTarget('IDLE');
+    setCameraView('PLAYER');
 
     // HP Setup
     let startingHp = hpOverride || MAX_HP;
@@ -652,16 +645,14 @@ export const useGameLogic = () => {
     );
 
     const nextTurn = turnOwnerOverride || 'PLAYER';
-    let nextPhase: GameState['phase'] = 'PLAYER_TURN';
-    if (nextTurn === 'DEALER') nextPhase = 'DEALER_TURN';
-    else if (nextTurn === 'PLAYER3') nextPhase = 'PLAYER3_TURN';
+    const nextPhase = phaseForOwner(nextTurn);
 
     setGameState(prev => ({ ...prev, phase: nextPhase, turnOwner: nextTurn }));
+    setAimTarget('IDLE');
+    setCameraView('PLAYER');
     if (nextTurn === 'PLAYER') {
-      setCameraView('PLAYER');
       addLog('YOUR MOVE.');
     } else {
-      setCameraView(nextTurn === 'PLAYER3' ? 'PLAYER3_GUN' : 'DEALER');
       addLog(`${getPlayerNameHelper(nextTurn).toUpperCase()}'S TURN.`);
     }
 
@@ -877,10 +868,10 @@ export const useGameLogic = () => {
     );
   };
 
-  const pickupGun = () => {
+  const pickupGun = (owner: TurnOwner = 'PLAYER') => {
     if (isProcessing) return;
-    if (gameStateRef.current.turnOwner !== 'PLAYER') {
-      addLog("NOT YOUR TURN TO PICK UP THE GUN", 'info');
+    if (gameStateRef.current.turnOwner !== owner) {
+      if (owner === 'PLAYER') addLog("NOT YOUR TURN TO PICK UP THE GUN", 'info');
       return;
     }
     // PREVENT GUN PICKUP WHILE ANYONE IS KNOCKED DOWN OR RECOVERING
@@ -891,9 +882,15 @@ export const useGameLogic = () => {
       addLog('WAIT FOR RECOVERY...', 'info');
       return;
     }
-    // New Logic: Don't move camera yet. Just show target choices.
-    setAimTarget('CHOOSING');
-    setCameraView('GUN'); // Set camera to gun view immediately
+    setAimTarget(owner === 'PLAYER' ? 'CHOOSING' : 'IDLE');
+    const ownerCamera: CameraView = owner === 'PLAYER'
+      ? 'GUN'
+      : owner === 'PLAYER3'
+        ? 'PLAYER3_GUN'
+        : owner === 'PLAYER4'
+          ? 'PLAYER4_GUN'
+          : 'DEALER_GUN';
+    setCameraView(ownerCamera);
   };
 
   const getPlayerState = (owner: TurnOwner) => {
@@ -924,63 +921,19 @@ export const useGameLogic = () => {
       if (owner === 'PLAYER3') return sideOpponent?.name || 'OPPONENT 2';
       if (owner === 'PLAYER4') return rightOpponent?.name || 'OPPONENT 3';
     }
-    return owner === 'DEALER' ? (gameStateRef.current.opponentName || 'OPPONENT') : 'OPPONENT 2';
+    if (owner === 'DEALER') return gameStateRef.current.opponentName || 'OPPONENT';
+    return owner === 'PLAYER4' ? 'OPPONENT 3' : 'OPPONENT 2';
   };
 
   const resolveTargetOwner = (targetPlayerId: string, localPlayerId: string, players: any[]): TurnOwner => {
     if (!targetPlayerId) return 'DEALER';
-    if (targetPlayerId === localPlayerId) return 'PLAYER';
-
-    const size = players?.length || 0;
-    const myIndex = players ? players.findIndex(p => p.id === localPlayerId) : -1;
-    if (myIndex === -1 || size < 2) return 'DEALER';
-
-    let absoluteId = targetPlayerId;
-    if (['PLAYER', 'PLAYER3', 'PLAYER4', 'DEALER'].includes(targetPlayerId)) {
-      if (targetPlayerId === 'PLAYER') {
-        absoluteId = localPlayerId;
-      } else if (targetPlayerId === 'DEALER') {
-        absoluteId = players[(myIndex + 2) % size]?.id || localPlayerId;
-      } else if (targetPlayerId === 'PLAYER3') {
-        absoluteId = players[(myIndex + 1) % size]?.id || localPlayerId;
-      } else if (targetPlayerId === 'PLAYER4') {
-        absoluteId = players[(myIndex + (size === 4 ? 3 : 1)) % size]?.id || localPlayerId;
-      }
-    }
-
-    if (absoluteId === localPlayerId) return 'PLAYER';
-    const targetIndex = players.findIndex(p => p.id === absoluteId);
-    if (targetIndex === -1) return 'DEALER';
-
-    if (size === 2) {
-      return 'DEALER';
-    }
-
-    if (size === 3) {
-      if (targetIndex === (myIndex + 2) % 3) return 'DEALER';
-      if (targetIndex === (myIndex + 1) % 3) return 'PLAYER3';
-      return 'DEALER';
-    }
-
-    if (size >= 4) {
-      if (targetIndex === (myIndex + 2) % size) return 'DEALER';
-      if (targetIndex === (myIndex + 1) % size) return 'PLAYER3';
-      if (targetIndex === (myIndex + 3) % size) return 'PLAYER4';
-      return 'DEALER';
-    }
-
-    return 'DEALER';
+    return normalizePlayerReference(targetPlayerId, localPlayerId, players);
   };
 
   const resolveOwnerPlayerId = (owner: TurnOwner): string | undefined => {
     const players = gameStateRef.current.multiplayerState?.players || [];
     const localPlayerId = gameStateRef.current.localPlayerId || '';
-    const localIndex = players.findIndex((p: any) => p.id === localPlayerId);
-    if (localIndex === -1 || players.length < 2) return undefined;
-    if (owner === 'PLAYER') return localPlayerId;
-    if (owner === 'PLAYER3') return players[(localIndex + 1) % players.length]?.id;
-    if (owner === 'PLAYER4') return players[(localIndex + 3) % players.length]?.id;
-    return players[(localIndex + 2) % players.length]?.id;
+    return ownerToPlayerId(owner, localPlayerId, players);
   };
 
   const fireShot = async (shooter: TurnOwner, target: TurnOwner) => {
@@ -1262,7 +1215,7 @@ export const useGameLogic = () => {
 
       const mPlayers = gameStateRef.current.multiplayerState?.players || [];
       const nextRelTurnOwner = resolveTargetOwner(absoluteTurnOwnerId, myId, mPlayers);
-      const nextPhase = nextRelTurnOwner === 'PLAYER' ? 'PLAYER_TURN' : (nextRelTurnOwner === 'PLAYER3' ? 'PLAYER3_TURN' : (nextRelTurnOwner === 'PLAYER4' ? 'PLAYER4_TURN' : 'DEALER_TURN'));
+      const nextPhase = phaseForOwner(nextRelTurnOwner);
 
       setGameState(prev => ({
         ...prev,
@@ -1273,8 +1226,8 @@ export const useGameLogic = () => {
         phase: nextPhase
       }));
 
-      setCameraView(nextRelTurnOwner === 'PLAYER' ? 'PLAYER' : (nextRelTurnOwner === 'PLAYER3' ? 'PLAYER' : (nextRelTurnOwner === 'PLAYER4' ? 'PLAYER' : 'DEALER')));
       setAimTarget('IDLE');
+      setCameraView('PLAYER');
       setIsProcessing(false);
       return;
     }
@@ -1422,6 +1375,7 @@ export const useGameLogic = () => {
                     setAnim(p => ({ ...p, triggerGlass: p.triggerGlass + 1 }));
                     await wait(2000);
                     setOverlayText(null);
+                    if (user === 'PLAYER') setKnownShell(null);
                 }
                 break;
 
@@ -2154,35 +2108,41 @@ export const useGameLogic = () => {
     const cards = gameStateRef.current.deckCards;
     if (!cards || !cards[index]) {
       setIsProcessing(false);
-      const nextPhase = gameStateRef.current.turnOwner === 'PLAYER' ? 'PLAYER_TURN' : 'DEALER_TURN';
+      const nextPhase = phaseForOwner(gameStateRef.current.turnOwner);
       setGameState(prev => ({ ...prev, phase: nextPhase, deckCards: undefined, selectedCardIndex: null }));
+      setAimTarget('IDLE');
       setCameraView('PLAYER');
       return;
     }
 
     const chosenCard = cards[index];
     const turnOwner = gameStateRef.current.turnOwner;
-    const userName = turnOwner === 'PLAYER' ? (playerName || 'PLAYER') : (gameStateRef.current.opponentName || 'OPPONENT');
+    const userName = getPlayerNameByOwner(turnOwner);
     const wasCuffedBeforeHermit = getPlayerState(turnOwner).isHandcuffed;
     
     setOverlayText(`🃏 ${userName.toUpperCase()} REVEALED: ${chosenCard.name.toUpperCase()}...`);
 
     await wait(1800);
+    setAimTarget('IDLE');
     setCameraView('PLAYER');
     await wait(1700);
 
     let deathTriggered = false;
+    let cardUserEliminated = false;
+    const tarotPlayerCount = gameStateRef.current.multiplayerState?.players?.length || 2;
+    const cardTargetOwner = nextAliveOwner(turnOwner, tarotPlayerCount, owner => getPlayerState(owner).hp);
 
     const dealDamage = async (target: TurnOwner, amount: number) => {
-      const isPlayerTarget = target === 'PLAYER';
-      const currentHp = isPlayerTarget ? playerRef.current.hp : dealerRef.current.hp;
-      const currentItems = isPlayerTarget ? playerRef.current.items : dealerRef.current.items;
+      const targetState = getPlayerState(target);
+      const setTarget = getPlayerSetter(target);
+      const targetName = getPlayerNameByOwner(target);
+      const currentHp = targetState.hp;
+      const currentItems = targetState.items;
       const hasTotem = currentItems.includes('TOTEM');
       const newHp = currentHp - amount;
       
       if (newHp <= 0) {
         if (hasTotem) {
-          const setTarget = isPlayerTarget ? setPlayer : setDealer;
           setTarget(p => {
             const idx = p.items.indexOf('TOTEM');
             const newItems = [...p.items];
@@ -2190,59 +2150,50 @@ export const useGameLogic = () => {
             return { ...p, hp: 1, items: newItems };
           });
           
-          setOverlayText(`✨ ${isPlayerTarget ? 'PLAYER' : 'DEALER'} SAVED BY TOTEM ✨`);
+          setOverlayText(`✨ ${targetName.toUpperCase()} SAVED BY TOTEM ✨`);
           setAnim(prev => ({
             ...prev,
             triggerTotem: (prev.triggerTotem || 0) + 1,
             totemTarget: target
           }));
           audioManager.playSound('totem');
-          addLog(`${isPlayerTarget ? 'PLAYER' : 'DEALER'}'S TOTEM OF UNDYING SAVED THEM!`, 'safe');
+          addLog(`${targetName.toUpperCase()}'S TOTEM OF UNDYING SAVED THEM!`, 'safe');
           await wait(3000);
           setOverlayText(null);
         } else {
-          const setTarget = isPlayerTarget ? setPlayer : setDealer;
           setTarget(p => ({ ...p, hp: 0 }));
-          addLog(`${isPlayerTarget ? 'PLAYER' : 'DEALER'} DIED TO HANGED MAN EFFECT.`, 'danger');
+          addLog(`${targetName.toUpperCase()} WAS ELIMINATED BY THE HANGED MAN EFFECT.`, 'danger');
           
           const isHardMode = gameStateRef.current.isHardMode;
           const isMultiplayer = gameStateRef.current.isMultiplayer;
           
-          if (isPlayerTarget) {
-            if (isHardMode) {
-              handleHardModeRoundEnd('DEALER');
+          if (isMultiplayer) {
+            const playerCount = gameStateRef.current.multiplayerState?.players?.length || 2;
+            const aliveOwners = ownersForPlayerCount(playerCount).filter(owner =>
+              owner === target ? false : getPlayerState(owner).hp > 0
+            );
+            if (aliveOwners.length <= 1) {
+              const winner = aliveOwners[0] || turnOwner;
+              if (playerCount >= 3 && onMPRoundEndRef.current) {
+                await onMPRoundEndRef.current(winner);
+              } else {
+                await handleMPRoundEnd(winner);
+              }
               return true;
             }
-            if (isMultiplayer && handleMPRoundEnd) {
-              handleMPRoundEnd('DEALER');
-              return true;
-            }
-            if (!isMultiplayer && !isHardMode && handleNormalModeRoundEnd) {
-              handleNormalModeRoundEnd('DEALER');
-              return true;
-            }
-            setGameState(prev => ({ ...prev, winner: 'DEALER', phase: 'GAME_OVER' }));
-          } else {
-            if (isHardMode) {
-              handleHardModeRoundEnd('PLAYER');
-              return true;
-            }
-            if (isMultiplayer && handleMPRoundEnd) {
-              handleMPRoundEnd('PLAYER');
-              return true;
-            }
-            if (!isMultiplayer && !isHardMode && handleNormalModeRoundEnd) {
-              handleNormalModeRoundEnd('PLAYER');
-              return true;
-            }
-            setGameState(prev => ({ ...prev, winner: 'PLAYER', phase: 'GAME_OVER' }));
+            cardUserEliminated = target === turnOwner;
+            return false;
           }
+
+          const winner: TurnOwner = target === 'PLAYER' ? 'DEALER' : 'PLAYER';
+          if (isHardMode) await handleHardModeRoundEnd(winner);
+          else if (handleNormalModeRoundEnd) await handleNormalModeRoundEnd(winner);
+          else setGameState(prev => ({ ...prev, winner, phase: 'GAME_OVER' }));
           return true;
         }
       } else {
-        const setTarget = isPlayerTarget ? setPlayer : setDealer;
         setTarget(p => ({ ...p, hp: newHp }));
-        addLog(`${isPlayerTarget ? 'PLAYER' : 'DEALER'} lost ${amount} HP from Hanged Man card.`, 'danger');
+        addLog(`${targetName.toUpperCase()} lost ${amount} HP from Hanged Man card.`, 'danger');
       }
       return false;
     };
@@ -2252,8 +2203,8 @@ export const useGameLogic = () => {
         const item = (cardRandomsOverride && cardRandomsOverride.magicianItem)
           ? cardRandomsOverride.magicianItem
           : getRandomItem(gameStateRef.current.isHardMode, turnOwner === 'DEALER');
-        const setOwner = turnOwner === 'PLAYER' ? setPlayer : setDealer;
-        const ownerItems = turnOwner === 'PLAYER' ? playerRef.current.items : dealerRef.current.items;
+        const setOwner = getPlayerSetter(turnOwner);
+        const ownerItems = getPlayerState(turnOwner).items;
         
         if (ownerItems.length < MAX_ITEMS) {
           setOwner(p => ({ ...p, items: [...p.items, item] }));
@@ -2273,32 +2224,7 @@ export const useGameLogic = () => {
       }
       
       case 'The Hermit': {
-        const nextOpponent: TurnOwner = turnOwner === 'PLAYER' ? 'DEALER' : 'PLAYER';
-        let resolvedNextOwner: TurnOwner = nextOpponent;
-        if (gameStateRef.current.isMultiplayer && (gameStateRef.current.isThreePlayer || gameStateRef.current.isFourPlayer)) {
-          const mPlayers = gameStateRef.current.multiplayerState?.players || [];
-          const size = mPlayers.length;
-          const myId = gameStateRef.current.localPlayerId || '';
-          const myIndex = mPlayers.findIndex(p => p.id === myId);
-
-          let currentId = myId;
-          if (turnOwner === 'DEALER') currentId = mPlayers[(myIndex + 2) % size]?.id;
-          else if (turnOwner === 'PLAYER3') currentId = mPlayers[(myIndex + 1) % size]?.id;
-          else if (turnOwner === 'PLAYER4') currentId = mPlayers[(myIndex + 3) % size]?.id;
-
-          const currentIdx = mPlayers.findIndex(p => p.id === currentId);
-          if (currentIdx !== -1) {
-            let nextIdx = (currentIdx + 1) % size;
-            const getHp = (playerObj: any) => {
-              const relOwner = resolveTargetOwner(playerObj.id, myId, mPlayers);
-              return getPlayerState(relOwner).hp;
-            };
-            while (getHp(mPlayers[nextIdx]) <= 0) {
-              nextIdx = (nextIdx + 1) % size;
-            }
-            resolvedNextOwner = resolveTargetOwner(mPlayers[nextIdx].id, myId, mPlayers);
-          }
-        }
+        const resolvedNextOwner = cardTargetOwner;
 
         const drawerState = getPlayerState(turnOwner);
         const receiverState = getPlayerState(resolvedNextOwner);
@@ -2323,10 +2249,10 @@ export const useGameLogic = () => {
       }
       
       case 'The Moon': {
-        const opponent = turnOwner === 'PLAYER' ? dealerRef.current : playerRef.current;
-        const setOpponent = turnOwner === 'PLAYER' ? setDealer : setPlayer;
-        const setOwner = turnOwner === 'PLAYER' ? setPlayer : setDealer;
-        const owner = turnOwner === 'PLAYER' ? playerRef.current : dealerRef.current;
+        const opponent = getPlayerState(cardTargetOwner);
+        const setOpponent = getPlayerSetter(cardTargetOwner);
+        const setOwner = getPlayerSetter(turnOwner);
+        const owner = getPlayerState(turnOwner);
         
         const stealableIndices = opponent.items
           .map((item, idx) => ({ item, idx }))
@@ -2417,8 +2343,8 @@ export const useGameLogic = () => {
       }
       
       case 'The Sun': {
-        const setOwner = turnOwner === 'PLAYER' ? setPlayer : setDealer;
-        const ownerState = turnOwner === 'PLAYER' ? playerRef.current : dealerRef.current;
+        const setOwner = getPlayerSetter(turnOwner);
+        const ownerState = getPlayerState(turnOwner);
         const newHp = Math.min(ownerState.maxHp, ownerState.hp + 1);
         setOwner(p => ({ ...p, hp: newHp }));
         addLog(`${userName} healed 1 HP.`, 'safe');
@@ -2427,8 +2353,8 @@ export const useGameLogic = () => {
       }
       
       case 'Death': {
-        const setOwner = turnOwner === 'PLAYER' ? setPlayer : setDealer;
-        const ownerState = turnOwner === 'PLAYER' ? playerRef.current : dealerRef.current;
+        const setOwner = getPlayerSetter(turnOwner);
+        const ownerState = getPlayerState(turnOwner);
         if (ownerState.items.length > 0) {
           const randIdx = (cardRandomsOverride && cardRandomsOverride.deathIndex !== undefined)
             ? cardRandomsOverride.deathIndex
@@ -2449,8 +2375,8 @@ export const useGameLogic = () => {
       }
       
       case 'The Tower': {
-        const setOpponent = turnOwner === 'PLAYER' ? setDealer : setPlayer;
-        const opponentState = turnOwner === 'PLAYER' ? dealerRef.current : playerRef.current;
+        const setOpponent = getPlayerSetter(cardTargetOwner);
+        const opponentState = getPlayerState(cardTargetOwner);
         const destroyableItems = opponentState.items.filter(i => i !== null && i !== 'TOTEM');
         
         if (destroyableItems.length > 0) {
@@ -2510,21 +2436,21 @@ export const useGameLogic = () => {
       }
       
       case 'Justice': {
-        const playerHp = playerRef.current.hp;
-        const dealerHp = dealerRef.current.hp;
-        setPlayer(p => ({ ...p, hp: dealerHp }));
-        setDealer(d => ({ ...d, hp: playerHp }));
-        addLog(`HP Swapped! Player HP: ${dealerHp}, Dealer HP: ${playerHp}`, 'safe');
+        const ownerState = getPlayerState(turnOwner);
+        const targetState = getPlayerState(cardTargetOwner);
+        getPlayerSetter(turnOwner)(state => ({ ...state, hp: targetState.hp }));
+        getPlayerSetter(cardTargetOwner)(state => ({ ...state, hp: ownerState.hp }));
+        addLog(`HP Swapped! ${userName}: ${targetState.hp}, ${getPlayerNameByOwner(cardTargetOwner)}: ${ownerState.hp}`, 'safe');
         setOverlayText("⚖️ JUSTICE: HP SWAPPED!");
         break;
       }
       
       case 'Temperance': {
-        const playerItems = [...playerRef.current.items];
-        const dealerItems = [...dealerRef.current.items];
-        setPlayer(p => ({ ...p, items: dealerItems }));
-        setDealer(d => ({ ...d, items: playerItems }));
-        addLog(`Items Swapped! Player gained ${dealerItems.length} items, Dealer gained ${playerItems.length} items.`, 'safe');
+        const ownerItems = [...getPlayerState(turnOwner).items];
+        const targetItems = [...getPlayerState(cardTargetOwner).items];
+        getPlayerSetter(turnOwner)(state => ({ ...state, items: targetItems }));
+        getPlayerSetter(cardTargetOwner)(state => ({ ...state, items: ownerItems }));
+        addLog(`Items Swapped! ${userName} gained ${targetItems.length} items, ${getPlayerNameByOwner(cardTargetOwner)} gained ${ownerItems.length} items.`, 'safe');
         setOverlayText("🔀 TEMPERANCE: ITEMS SWAPPED!");
         break;
       }
@@ -2534,44 +2460,15 @@ export const useGameLogic = () => {
     setOverlayText(null);
 
     if (!deathTriggered && gameStateRef.current.phase !== 'GAME_OVER') {
-      let nextOwner = turnOwner;
+      let nextOwner = cardUserEliminated ? cardTargetOwner : turnOwner;
       if (chosenCard.name === 'The Hermit') {
-        const nextOpponent: TurnOwner = turnOwner === 'PLAYER' ? 'DEALER' : 'PLAYER';
-        let resolvedNextOwner: TurnOwner = nextOpponent;
-        if (gameStateRef.current.isMultiplayer && (gameStateRef.current.isThreePlayer || gameStateRef.current.isFourPlayer)) {
-          const mPlayers = gameStateRef.current.multiplayerState?.players || [];
-          const size = mPlayers.length;
-          const myId = gameStateRef.current.localPlayerId || '';
-          const myIndex = mPlayers.findIndex(p => p.id === myId);
-
-          let currentId = myId;
-          if (turnOwner === 'DEALER') currentId = mPlayers[(myIndex + 2) % size]?.id;
-          else if (turnOwner === 'PLAYER3') currentId = mPlayers[(myIndex + 1) % size]?.id;
-          else if (turnOwner === 'PLAYER4') currentId = mPlayers[(myIndex + 3) % size]?.id;
-
-          const currentIdx = mPlayers.findIndex(p => p.id === currentId);
-          if (currentIdx !== -1) {
-            let nextIdx = (currentIdx + 1) % size;
-            const getHp = (playerObj: any) => {
-              const relOwner = resolveTargetOwner(playerObj.id, myId, mPlayers);
-              return getPlayerState(relOwner).hp;
-            };
-            while (getHp(mPlayers[nextIdx]) <= 0) {
-              nextIdx = (nextIdx + 1) % size;
-            }
-            resolvedNextOwner = resolveTargetOwner(mPlayers[nextIdx].id, myId, mPlayers);
-          }
-        }
-
-        const receiverWasCuffed = getPlayerState(resolvedNextOwner).isHandcuffed;
-
         if (wasCuffedBeforeHermit) {
           nextOwner = turnOwner;
         } else {
-          nextOwner = resolvedNextOwner;
+          nextOwner = cardTargetOwner;
         }
       }
-      const nextPhase = nextOwner === 'PLAYER' ? 'PLAYER_TURN' : (nextOwner === 'PLAYER3' ? 'PLAYER3_TURN' : (nextOwner === 'PLAYER4' ? 'PLAYER4_TURN' : 'DEALER_TURN'));
+      const nextPhase = phaseForOwner(nextOwner);
       setGameState(prev => ({
         ...prev,
         phase: nextPhase,
@@ -2580,7 +2477,7 @@ export const useGameLogic = () => {
         selectedCardIndex: null
       }));
     }
-    
+    setAimTarget('IDLE');
     setCameraView('PLAYER');
     setIsProcessing(false);
   };

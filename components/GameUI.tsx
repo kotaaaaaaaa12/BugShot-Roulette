@@ -140,6 +140,42 @@ export const GameUI: React.FC<GameUIProps> = ({
         return opp ? opp.name : 'DEALER';
     };
 
+    const getPlayerHpById = (targetPlayerId: string): number => {
+        const players = mpGameState?.players || [];
+        const localPlayerId = mpMyPlayerId || gameState.localPlayerId || '';
+        const localIndex = players.findIndex((entry: any) => entry.id === localPlayerId);
+        const targetIndex = players.findIndex((entry: any) => entry.id === targetPlayerId);
+        if (localIndex === -1 || targetIndex === -1) return 0;
+        const offset = (targetIndex - localIndex + players.length) % players.length;
+        if (offset === 0) return player.hp;
+        if (offset === 1) return player3?.hp ?? 0;
+        if (offset === 3 && players.length >= 4) return player4?.hp ?? 0;
+        return dealer.hp;
+    };
+
+    const multiplayerUiState = mpGameState ? {
+        ...mpGameState,
+        players: (mpGameState.players || []).map((entry: any) => ({
+            ...entry,
+            isAlive: getPlayerHpById(entry.id) > 0,
+        })),
+    } : mpGameState;
+
+    const getTurnOwnerName = () => {
+        if (gameState.turnOwner === 'PLAYER') return playerName || 'PLAYER';
+        const players = multiplayerUiState?.players || [];
+        const localPlayerId = mpMyPlayerId || gameState.localPlayerId || '';
+        const localIndex = players.findIndex((entry: any) => entry.id === localPlayerId);
+        const offset = gameState.turnOwner === 'PLAYER3' ? 1 : gameState.turnOwner === 'PLAYER4' ? 3 : 2;
+        return localIndex === -1 ? getOpponentName() : players[(localIndex + offset) % players.length]?.name || getOpponentName();
+    };
+
+    useEffect(() => {
+        if (gameState.turnOwner !== 'PLAYER' || gameState.phase !== 'PLAYER_TURN') {
+            setPendingItemIndex(null);
+        }
+    }, [gameState.turnOwner, gameState.phase]);
+
     // Cleanup active timer references on unmount
     useEffect(() => {
         return () => {
@@ -548,7 +584,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                             <div className="absolute top-[20%] left-1/2 transform -translate-x-1/2 z-30 flex flex-col items-center animate-in fade-in zoom-in duration-500 pointer-events-none">
                                 <div className="px-6 py-2 bg-black/85 border border-purple-500/35 rounded-full shadow-[0_0_30px_rgba(168,85,247,0.2)] backdrop-blur-md">
                                     <span className="text-xs md:text-xl font-black tracking-[0.3em] uppercase text-purple-400 animate-pulse">
-                                        {gameState.turnOwner === 'PLAYER' ? '🔮 SELECT A TAROT CARD 🔮' : `🔮 ${gameState.opponentName?.toUpperCase() || 'DEALER'} CHOOSING CARD... 🔮`}
+                                        {gameState.turnOwner === 'PLAYER' ? '🔮 SELECT A TAROT CARD 🔮' : `🔮 ${getTurnOwnerName().toUpperCase()} CHOOSING CARD... 🔮`}
                                     </span>
                                 </div>
                             </div>
@@ -583,7 +619,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                                         isMultiplayer={isMultiplayer}
                                         isThreePlayer={gameState.isThreePlayer}
                                         isFourPlayer={gameState.isFourPlayer}
-                                        mpGameState={mpGameState}
+                                        mpGameState={multiplayerUiState}
                                         mpMyPlayerId={mpMyPlayerId}
                                         settings={settings}
                                     />
@@ -1048,21 +1084,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                             {gameState.multiplayerState?.players
                                 .filter((p: any) => p.id !== gameState.localPlayerId)
                                 .map((targetPlayer: any) => {
-                                    // Target relative owner check to determine HP
-                                    const playersList = gameState.multiplayerState?.players || [];
-                                    const myId = gameState.localPlayerId || '';
-                                    const myIndex = playersList.findIndex((p: any) => p.id === myId);
-                                    let targetHp = 1;
-                                    if (myIndex !== -1) {
-                                        const playerCount = playersList.length;
-                                        const frontOpponent = playersList[(myIndex + 2) % playerCount];
-                                        const leftOpponent = playersList[(myIndex + 1) % playerCount];
-                                        const rightOpponent = playerCount >= 4 ? playersList[(myIndex + 3) % playerCount] : null;
-                                        if (frontOpponent && targetPlayer.id === frontOpponent.id) targetHp = dealer.hp;
-                                        else if (leftOpponent && targetPlayer.id === leftOpponent.id && player3) targetHp = player3.hp;
-                                        else if (rightOpponent && targetPlayer.id === rightOpponent.id && player4) targetHp = player4.hp;
-                                        else targetHp = player.hp;
-                                    }
+                                    const targetHp = getPlayerHpById(targetPlayer.id);
                                     const isTargetDead = targetHp <= 0;
                                     
                                     return (
