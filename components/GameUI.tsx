@@ -617,7 +617,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                                             audioManager.playSound('grab');
                                             const item = player.items[idx];
                                             const targetedItems = ['CUFFS', 'ADRENALINE', 'CRUSHER', 'FLASHBANG'];
-                                            if (gameState.isThreePlayer && targetedItems.includes(item)) {
+                                            if ((gameState.isThreePlayer || gameState.isFourPlayer) && targetedItems.includes(item)) {
                                                 setPendingItemIndex(idx);
                                             } else {
                                                 onUseItem(idx);
@@ -658,9 +658,11 @@ export const GameUI: React.FC<GameUIProps> = ({
                         {/* Extraction Grid */}
                         <div className="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-5 gap-4 md:gap-8 w-full max-w-6xl mx-auto">
                             {(() => {
-                                const targetItems = (gameState.isThreePlayer && gameState.adrenalineTargetOwner === 'PLAYER3' && player3)
+                                const targetItems = gameState.adrenalineTargetOwner === 'PLAYER3' && player3
                                     ? player3.items
-                                    : dealer.items;
+                                    : gameState.adrenalineTargetOwner === 'PLAYER4' && player4
+                                        ? player4.items
+                                        : dealer.items;
 
                                 if (targetItems.length === 0) {
                                     return (
@@ -1052,10 +1054,13 @@ export const GameUI: React.FC<GameUIProps> = ({
                                     const myIndex = playersList.findIndex((p: any) => p.id === myId);
                                     let targetHp = 1;
                                     if (myIndex !== -1) {
-                                        const frontOpponent = playersList[(myIndex + 2) % 3];
-                                        const sideOpponent = playersList[(myIndex + 1) % 3];
+                                        const playerCount = playersList.length;
+                                        const frontOpponent = playersList[(myIndex + 2) % playerCount];
+                                        const leftOpponent = playersList[(myIndex + 1) % playerCount];
+                                        const rightOpponent = playerCount >= 4 ? playersList[(myIndex + 3) % playerCount] : null;
                                         if (frontOpponent && targetPlayer.id === frontOpponent.id) targetHp = dealer.hp;
-                                        else if (sideOpponent && targetPlayer.id === sideOpponent.id && player3) targetHp = player3.hp;
+                                        else if (leftOpponent && targetPlayer.id === leftOpponent.id && player3) targetHp = player3.hp;
+                                        else if (rightOpponent && targetPlayer.id === rightOpponent.id && player4) targetHp = player4.hp;
                                         else targetHp = player.hp;
                                     }
                                     const isTargetDead = targetHp <= 0;

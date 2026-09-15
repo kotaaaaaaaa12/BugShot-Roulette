@@ -396,7 +396,7 @@ export default function App() {
   };
 
   // Broadcast local actions to server
-  const handleFireShot = async (target: TurnOwner) => {
+  const handleFireShot = async (target: TurnOwner, selectedTargetPlayerId?: string) => {
     if (spGame.gameState.phase !== 'PLAYER_TURN' && spGame.gameState.phase !== 'DEALER_TURN' && spGame.gameState.phase !== 'PLAYER3_TURN' && spGame.gameState.phase !== 'RESOLVING') return;
     if (spGame.gameState.turnOwner !== 'PLAYER') return;
     if (spGame.isProcessing) return;
@@ -411,14 +411,18 @@ export default function App() {
       const myIndex = playersList.findIndex((p: any) => p.id === myId);
       const playerCount = playersList.length;
 
-      let targetPlayerId = myId;
-      if (target === 'DEALER') targetPlayerId = playersList[(myIndex + 2) % playerCount]?.id || myId;
-      else if (target === 'PLAYER3') targetPlayerId = playersList[(myIndex + 1) % playerCount]?.id || myId;
-      else if (target === 'PLAYER4') targetPlayerId = playersList[(myIndex + 3) % playerCount]?.id || myId;
+      let targetPlayerId = selectedTargetPlayerId || myId;
+      if (!selectedTargetPlayerId) {
+        if (target === 'DEALER') targetPlayerId = playersList[(myIndex + 2) % playerCount]?.id || myId;
+        else if (target === 'PLAYER3') targetPlayerId = playersList[(myIndex + 1) % playerCount]?.id || myId;
+        else if (target === 'PLAYER4') targetPlayerId = playersList[(myIndex + 3) % playerCount]?.id || myId;
+      }
 
       const intendedAim: AimTarget = target === 'PLAYER'
         ? 'SELF'
-        : (target === 'PLAYER3' ? 'LEFT' : (target === 'PLAYER4' ? 'RIGHT' : 'OPPONENT'));
+        : (target === 'PLAYER3'
+          ? (playerCount === 3 && myIndex === 1 ? 'RIGHT' : 'LEFT')
+          : (target === 'PLAYER4' ? 'RIGHT' : 'OPPONENT'));
       if (isMobile && spGame.aimTarget !== intendedAim) {
         spGame.setAimTarget(intendedAim);
         spGame.setCameraView('GUN');
@@ -465,7 +469,16 @@ export default function App() {
       let contractLoot: string[] | undefined;
       let phoneFutureIndex: number | undefined;
 
-      const isThreePlayer = spGame.gameState.isThreePlayer;
+      const isMultiPlayerSeat = spGame.gameState.isThreePlayer || spGame.gameState.isFourPlayer;
+
+      // Mirror has no target picker, so bind it to the same absolute opponent on every client.
+      if (item === 'MIRROR' && isMultiPlayerSeat && !targetPlayerId) {
+        const playersList = mp.room?.players || [];
+        const myIndex = playersList.findIndex((p: any) => p.id === (mp.playerId || ''));
+        if (myIndex !== -1) {
+          targetPlayerId = playersList[(myIndex + 2) % playersList.length]?.id;
+        }
+      }
 
       if (item === 'DECK_CARD') {
         const allTarotNames = [
@@ -480,7 +493,7 @@ export default function App() {
           mp.sendMessage(mp.room.id, '[STICKER]:sticker9.gif');
         }
       } else if (item === 'CRUSHER') {
-        if (isThreePlayer) {
+        if (isMultiPlayerSeat) {
           const playersList = mp.room?.players || [];
           const myId = mp.playerId || '';
           
@@ -531,6 +544,26 @@ export default function App() {
         }
         if (available.length > 0) {
           phoneFutureIndex = available[Math.floor(Math.random() * available.length)];
+        }
+      }
+
+      // Do not broadcast an adrenaline use that the local rules will reject.
+      // Otherwise remote clients remove the item while the initiating client keeps it.
+      if (item === 'ADRENALINE' && isMultiPlayerSeat) {
+        const playersList = mp.room?.players || [];
+        const myId = mp.playerId || '';
+        const myIndex = playersList.findIndex((p: any) => p.id === myId);
+        const targetIndex = playersList.findIndex((p: any) => p.id === targetPlayerId);
+        let targetState = spGame.dealer;
+        if (myIndex !== -1 && targetIndex !== -1) {
+          const size = playersList.length;
+          if (targetIndex === (myIndex + 1) % size) targetState = spGame.player3;
+          else if (size >= 4 && targetIndex === (myIndex + 3) % size) targetState = spGame.player4;
+        }
+        const canSteal = targetState.items.some(i => i !== 'ADRENALINE' && i !== 'JACKPOT' && i !== 'TOTEM');
+        if (!canSteal) {
+          await spGame.usePlayerItem(index, deckCards, jackpotOutcome, crushIndex, contractLoot as any, phoneFutureIndex, targetPlayerId);
+          return;
         }
       }
 
