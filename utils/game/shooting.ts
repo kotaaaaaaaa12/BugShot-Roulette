@@ -557,11 +557,17 @@ export const performShot = async (
         if (nextPersonState.isHandcuffed) {
             const message = `${nextPersonName} CUFFED. SKIPPING.`;
             addLog(message, 'info');
-            setOverlayText(`${nextOwner} CUFFED`);
+            // In multiplayer, the full-screen restraint notice belongs only on
+            // the affected player's client. Other clients still receive the log.
+            if (!gameState.isMultiplayer || nextOwner === 'PLAYER') {
+                setOverlayText(`${nextPersonName} CUFFED`);
+            }
             audioManager.playSound('checkhandcuffs');
 
             await wait(2800); // Slower
-            setOverlayText(null);
+            if (!gameState.isMultiplayer || nextOwner === 'PLAYER') {
+                setOverlayText(null);
+            }
 
             if (nextOwner === 'PLAYER') setPlayer(p => ({ ...p, isHandcuffed: false }));
             else setDealer(d => ({ ...d, isHandcuffed: false }));

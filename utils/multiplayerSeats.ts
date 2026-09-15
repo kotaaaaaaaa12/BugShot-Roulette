@@ -20,12 +20,11 @@ export const ownerToPlayerId = (
 ): string | undefined => {
   const localIndex = players.findIndex(player => player.id === localPlayerId);
   if (localIndex === -1 || players.length < 2) return undefined;
-  const offsetByOwner: Record<TurnOwner, number> = {
-    PLAYER: 0,
-    PLAYER3: 1,
-    DEALER: 2,
-    PLAYER4: 3,
-  };
+  const offsetByOwner: Record<TurnOwner, number> = players.length === 2
+    ? { PLAYER: 0, DEALER: 1, PLAYER3: 1, PLAYER4: 1 }
+    : players.length === 3
+      ? { PLAYER: 0, PLAYER3: 1, DEALER: 2, PLAYER4: 2 }
+      : { PLAYER: 0, PLAYER3: 1, DEALER: 2, PLAYER4: 3 };
   return players[(localIndex + offsetByOwner[owner]) % players.length]?.id;
 };
 
@@ -76,4 +75,3 @@ export const nextAliveOwner = (
   }
   return currentOwner;
 };
-

@@ -140,18 +140,20 @@ export const GameUI: React.FC<GameUIProps> = ({
         return opp ? opp.name : 'DEALER';
     };
 
-    const getPlayerHpById = (targetPlayerId: string): number => {
+    const getPlayerStateById = (targetPlayerId: string): PlayerState | null => {
         const players = mpGameState?.players || [];
         const localPlayerId = mpMyPlayerId || gameState.localPlayerId || '';
         const localIndex = players.findIndex((entry: any) => entry.id === localPlayerId);
         const targetIndex = players.findIndex((entry: any) => entry.id === targetPlayerId);
-        if (localIndex === -1 || targetIndex === -1) return 0;
+        if (localIndex === -1 || targetIndex === -1) return null;
         const offset = (targetIndex - localIndex + players.length) % players.length;
-        if (offset === 0) return player.hp;
-        if (offset === 1) return player3?.hp ?? 0;
-        if (offset === 3 && players.length >= 4) return player4?.hp ?? 0;
-        return dealer.hp;
+        if (offset === 0) return player;
+        if (offset === 1) return player3 || null;
+        if (offset === 3 && players.length >= 4) return player4 || null;
+        return dealer;
     };
+
+    const getPlayerHpById = (targetPlayerId: string): number => getPlayerStateById(targetPlayerId)?.hp ?? 0;
 
     const multiplayerUiState = mpGameState ? {
         ...mpGameState,
@@ -425,7 +427,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                 )}
 
                 {/* Cuffs Indicators */}
-                {(player.isHandcuffed || dealer.isHandcuffed) && (
+                {(player.isHandcuffed || (!gameState.isMultiplayer && dealer.isHandcuffed)) && (
                     <div className={`absolute ${player.isHandcuffed ? 'bottom-[30%] left-4 md:left-[20%]' : 'top-[20%] right-4 md:right-[20%]'} z-20 animate-pulse pointer-events-none`}>
                         <div className="text-sm md:text-2xl font-black text-stone-100 bg-red-600 px-2 py-0.5 md:px-4 md:py-1 rotate-12 shadow-lg border border-white">CUFFED</div>
                     </div>
@@ -1084,25 +1086,27 @@ export const GameUI: React.FC<GameUIProps> = ({
                             {gameState.multiplayerState?.players
                                 .filter((p: any) => p.id !== gameState.localPlayerId)
                                 .map((targetPlayer: any) => {
-                                    const targetHp = getPlayerHpById(targetPlayer.id);
-                                    const isTargetDead = targetHp <= 0;
+                                    const targetState = getPlayerStateById(targetPlayer.id);
+                                    const isTargetDead = !targetState || targetState.hp <= 0;
+                                    const isCuffsTargetAlreadyRestrained = player.items[pendingItemIndex] === 'CUFFS' && !!targetState?.isHandcuffed;
+                                    const isTargetDisabled = isTargetDead || isCuffsTargetAlreadyRestrained;
                                     
                                     return (
                                         <button
                                             key={targetPlayer.id}
-                                            disabled={isTargetDead}
+                                            disabled={isTargetDisabled}
                                             onClick={() => {
                                                 audioManager.playSound('click');
                                                 onUseItem(pendingItemIndex, targetPlayer.id);
                                                 setPendingItemIndex(null);
                                             }}
                                             className={`w-full py-4 px-6 border-2 font-black tracking-widest text-lg uppercase rounded-xl transition-all duration-300 ${
-                                                isTargetDead
+                                                isTargetDisabled
                                                     ? 'bg-stone-950/50 border-stone-900/60 text-stone-600 cursor-not-allowed italic'
                                                     : 'bg-stone-950 border-stone-800 text-stone-200 hover:border-white hover:bg-stone-100 hover:text-stone-950 active:scale-95'
                                             }`}
                                         >
-                                            {targetPlayer.name} {isTargetDead && '(KNOCKED OUT)'}
+                                            {targetPlayer.name} {isTargetDead ? '(KNOCKED OUT)' : isCuffsTargetAlreadyRestrained ? '(ALREADY CUFFED)' : ''}
                                         </button>
                                     );
                                 })}

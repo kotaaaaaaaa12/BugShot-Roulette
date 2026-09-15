@@ -1197,10 +1197,14 @@ export const useGameLogic = () => {
             const nextSetter = getPlayerSetter(nextRelOwner);
             nextSetter(p => ({ ...p, isHandcuffed: false }));
             addLog(`${nextPlayer.name.toUpperCase()} WAS CUFFED. SKIPPING.`, 'info');
-            setOverlayText(`${nextPlayer.name.toUpperCase()} CUFFED`);
+            if (nextRelOwner === 'PLAYER') {
+              setOverlayText(`${nextPlayer.name.toUpperCase()} CUFFED`);
+            }
             audioManager.playSound('checkhandcuffs');
             await wait(2500);
-            setOverlayText(null);
+            if (nextRelOwner === 'PLAYER') {
+              setOverlayText(null);
+            }
 
             let nextNextIdx = (nextIdx + 1) % size;
             while (getNewHp(mPlayers[nextNextIdx].id) <= 0) {
@@ -1356,9 +1360,13 @@ export const useGameLogic = () => {
                 targetSetter(p => ({ ...p, isHandcuffed: true }));
                 setAnim(p => ({ ...p, triggerCuff: p.triggerCuff + 1 }));
                 addLog(`${userName.toUpperCase()} CUFFED ${targetName.toUpperCase()}`, 'info');
-                setOverlayText(`⛓️ ${targetName.toUpperCase()} CUFFED!`);
+                if (resolvedTargetOwner === 'PLAYER') {
+                    setOverlayText(`⛓️ ${targetName.toUpperCase()} CUFFED!`);
+                }
                 await wait(2000);
-                setOverlayText(null);
+                if (resolvedTargetOwner === 'PLAYER') {
+                    setOverlayText(null);
+                }
                 break;
 
             case 'GLASS':

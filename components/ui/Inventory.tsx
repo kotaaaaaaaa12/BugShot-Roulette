@@ -214,7 +214,8 @@ const InventoryComponent: React.FC<InventoryProps> = ({ player, dealer, gameStat
     const hoveredItem = hoveredIdx !== null ? player.items[hoveredIdx] : null;
     const selectedItem = selectedIdx !== null ? player.items[selectedIdx] : null;
     const mobileTooltipItem = isMobileView ? hoveredItem ?? selectedItem : hoveredItem;
-    const isHoveredCuffDisabled = (hoveredItem ?? selectedItem) === 'CUFFS' && dealer.isHandcuffed;
+    const usesMultiplayerTargetPicker = gameState.isMultiplayer && (gameState.isThreePlayer || gameState.isFourPlayer);
+    const isHoveredCuffDisabled = (hoveredItem ?? selectedItem) === 'CUFFS' && !usesMultiplayerTargetPicker && dealer.isHandcuffed;
 
     return (
         <div className="flex-1 flex justify-center gap-1 pointer-events-auto h-full items-end relative w-full">
@@ -245,7 +246,7 @@ const InventoryComponent: React.FC<InventoryProps> = ({ player, dealer, gameStat
 
             <div ref={scrollRef} className={containerClass}>
                 {player.items.map((item, idx) => {
-                    const isCuffDisabled = item === 'CUFFS' && dealer.isHandcuffed;
+                    const isCuffDisabled = item === 'CUFFS' && !usesMultiplayerTargetPicker && dealer.isHandcuffed;
                     const isTotem = item === 'TOTEM';
                     const isUsageDisabled = disabled || gameState.phase !== 'PLAYER_TURN' || isGunHeld || isCuffDisabled || isProcessing || player.isFlashbanged || isTotem;
                     const isSelected = selectedIdx === idx;
