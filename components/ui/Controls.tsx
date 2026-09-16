@@ -1,6 +1,6 @@
 import React from 'react';
 import { AimTarget, TurnOwner, GameSettings } from '../../types';
-import { Hand, Target, User } from 'lucide-react';
+import { Hand, Target, User, Undo2 } from 'lucide-react';
 import { audioManager } from '../../utils/audioManager';
 
 export interface GameStateData {
@@ -20,6 +20,7 @@ interface ControlsProps {
     isProcessing: boolean;
     isRecovering?: boolean; // Whether player/dealer is knocked and recovering
     onPickupGun: () => void;
+    onDropGun: () => void;
     onFireShot: (target: TurnOwner, targetId?: string) => void;
     onHoverTarget: (target: AimTarget, targetId?: string) => void;
     currentAimTarget?: AimTarget;
@@ -37,6 +38,7 @@ const ControlsComponent: React.FC<ControlsProps> = ({
     isProcessing,
     isRecovering = false,
     onPickupGun,
+    onDropGun,
     onFireShot,
     onHoverTarget,
     currentAimTarget = 'IDLE',
@@ -98,6 +100,19 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                 {/* Shooting */}
                 {isGunHeld && (
                     <>
+                        <button
+                            onClick={() => {
+                                audioManager.playSound('click');
+                                onDropGun();
+                            }}
+                            disabled={isProcessing}
+                            className={isPotato
+                                ? "bg-neutral-900 border border-stone-700 px-4 py-2 text-stone-300 font-black text-xs hover:bg-neutral-800 tracking-wide flex items-center gap-1 disabled:opacity-50"
+                                : "bg-black/90 border border-stone-600 px-4 py-2.5 text-stone-200 font-black text-xs hover:bg-stone-800 hover:border-white transition-all active:scale-95 tracking-wide flex items-center gap-1.5 disabled:opacity-50 shadow-lg rounded-lg"}
+                        >
+                            <Undo2 size={14} />
+                            DROP SHOTGUN
+                        </button>
                         {isThreePlayer || isFourPlayer ? (() => {
                             if (!mpGameState || !Array.isArray((mpGameState as any).players)) return null;
                             const players = (mpGameState as any).players;

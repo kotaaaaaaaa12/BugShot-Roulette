@@ -130,6 +130,7 @@ const japanese: Record<string, string> = {
   'USE': '使う',
   'WAIT': '待機',
   'DROP GUN FIRST': '先に銃を置いてください',
+  'DROP SHOTGUN': 'ショットガンを置く',
   'NO ITEMS': 'アイテムなし',
   'No Items': 'アイテムなし',
   'Incoming Shipment Verified': '補給物資が届きました',

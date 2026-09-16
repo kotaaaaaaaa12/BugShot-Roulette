@@ -672,6 +672,14 @@ export default function App() {
     spGame.pickupGun('PLAYER');
   };
 
+  const handleDropGun = () => {
+    if (spGame.isProcessing || spGame.gameState.turnOwner !== 'PLAYER') return;
+    if (appState === 'GAME' && spGame.gameState.isMultiplayer && mp.room) {
+      mp.sendImmediateAction(mp.room.id, { type: 'DROP_GUN' });
+    }
+    spGame.dropGun('PLAYER');
+  };
+
   const handleStealItem = (index: number) => {
     if (spGame.isProcessing) return;
     if (spGame.gameState.phase !== 'STEALING') return;
@@ -740,6 +748,9 @@ export default function App() {
               }
               case 'PICKUP_GUN':
                 spGame.pickupGun(relSender);
+                break;
+              case 'DROP_GUN':
+                spGame.dropGun(relSender);
                 break;
               case 'STEAL_ITEM':
                 spGame.stealItem(action.index, relSender);
@@ -929,6 +940,9 @@ export default function App() {
               break;
             case 'PICKUP_GUN':
               spGame.pickupGun('DEALER');
+              break;
+            case 'DROP_GUN':
+              spGame.dropGun('DEALER');
               break;
             case 'STEAL_ITEM':
               spGame.stealItem(action.index, 'DEALER');
@@ -1893,6 +1907,7 @@ export default function App() {
         onUseItem={handleUseItem}
         onHoverTarget={handleHoverTarget}
         onPickupGun={handlePickupGun}
+        onDropGun={handleDropGun}
         onOpenSettings={() => setIsSettingsOpen(true)}
         onOpenGuide={() => setIsGuideOpen(true)}
         onOpenScoreboard={() => setIsScoreboardOpen(true)}

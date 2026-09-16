@@ -44,6 +44,7 @@ interface GameUIProps {
     onUseItem: (index: number, targetPlayerId?: string) => void;
     onHoverTarget: (target: AimTarget, targetId?: string) => void;
     onPickupGun: () => void;
+    onDropGun: () => void;
     onOpenSettings: () => void;
     onOpenGuide: () => void;
     onOpenScoreboard: () => void;
@@ -100,6 +101,7 @@ export const GameUI: React.FC<GameUIProps> = ({
     onUseItem,
     onHoverTarget,
     onPickupGun,
+    onDropGun,
     onOpenSettings,
     onOpenGuide,
     onOpenScoreboard,
@@ -615,6 +617,7 @@ export const GameUI: React.FC<GameUIProps> = ({
                                         isProcessing={isProcessing}
                                         isRecovering={isRecovering}
                                         onPickupGun={onPickupGun}
+                                        onDropGun={onDropGun}
                                         onFireShot={onFireShot}
                                         onHoverTarget={onHoverTarget}
                                         currentAimTarget={aimTarget}

@@ -246,18 +246,18 @@ export const useGameLogic = () => {
     return gameState.isMultiplayer ? (gameState.opponentName || 'OPPONENT') : 'DEALER';
   };
 
+  const getMultiplayerNameByOwner = (owner: TurnOwner): string | null => {
+    const players = gameStateRef.current.multiplayerState?.players || [];
+    const localPlayerId = gameStateRef.current.localPlayerId || '';
+    if (!localPlayerId || players.length < 2) return null;
+    const absolutePlayerId = ownerToPlayerId(owner, localPlayerId, players);
+    return players.find(player => player.id === absolutePlayerId)?.name || null;
+  };
+
   const getPlayerNameHelper = (owner: TurnOwner) => {
+    const multiplayerName = getMultiplayerNameByOwner(owner);
+    if (multiplayerName) return multiplayerName;
     if (owner === 'PLAYER') return playerName || 'YOU';
-    if (gameStateRef.current.multiplayerState?.players) {
-      const players = gameStateRef.current.multiplayerState.players;
-      const myId = gameStateRef.current.localPlayerId || '';
-      const myIndex = players.findIndex((p: any) => p.id === myId);
-      if (myIndex !== -1) {
-        const offset = owner === 'PLAYER3' ? 1 : owner === 'PLAYER4' ? 3 : 2;
-        const opponent = players[(myIndex + offset) % players.length];
-        if (opponent) return opponent.name;
-      }
-    }
     if (owner === 'DEALER') return getOpponentName();
     return owner === 'PLAYER4' ? 'OPPONENT 3' : 'OPPONENT 2';
   };
@@ -893,6 +893,12 @@ export const useGameLogic = () => {
     setCameraView(ownerCamera);
   };
 
+  const dropGun = (owner: TurnOwner = 'PLAYER') => {
+    if (isProcessing || gameStateRef.current.turnOwner !== owner) return;
+    setAimTarget('IDLE');
+    setCameraView('PLAYER');
+  };
+
   const getPlayerState = (owner: TurnOwner) => {
     if (owner === 'PLAYER') return playerRef.current;
     if (owner === 'PLAYER3') return player3Ref.current;
@@ -908,19 +914,9 @@ export const useGameLogic = () => {
   };
 
   const getPlayerNameByOwner = (owner: TurnOwner) => {
+    const multiplayerName = getMultiplayerNameByOwner(owner);
+    if (multiplayerName) return multiplayerName;
     if (owner === 'PLAYER') return playerName || 'PLAYER';
-    const players = gameStateRef.current.multiplayerState?.players || [];
-    const myId = gameStateRef.current.localPlayerId || '';
-    const myIndex = players.findIndex(p => p.id === myId);
-    if (myIndex !== -1 && players.length >= 3) {
-      const size = players.length;
-      const frontOpponent = players[(myIndex + 2) % size];
-      const sideOpponent = players[(myIndex + 1) % size];
-      const rightOpponent = size >= 4 ? players[(myIndex + 3) % size] : null;
-      if (owner === 'DEALER') return frontOpponent?.name || 'OPPONENT 1';
-      if (owner === 'PLAYER3') return sideOpponent?.name || 'OPPONENT 2';
-      if (owner === 'PLAYER4') return rightOpponent?.name || 'OPPONENT 3';
-    }
     if (owner === 'DEALER') return gameStateRef.current.opponentName || 'OPPONENT';
     return owner === 'PLAYER4' ? 'OPPONENT 3' : 'OPPONENT 2';
   };
@@ -2529,32 +2525,8 @@ export const useGameLogic = () => {
     processItemEffect,
     resetGame,
     setPlayerName,
-    pickupGun: (picker: TurnOwner = 'PLAYER') => {
-      const isMP = gameStateRef.current.isMultiplayer;
-      if (!isMP) {
-        if (gameStateRef.current.phase !== 'PLAYER_TURN' && gameStateRef.current.phase !== 'DEALER_TURN' && gameStateRef.current.phase !== 'PLAYER3_TURN' && gameStateRef.current.phase !== 'PLAYER4_TURN' && gameStateRef.current.phase !== 'RESOLVING') return;
-      }
-
-      // Strict turn check
-      if (picker === 'PLAYER' && gameStateRef.current.turnOwner !== 'PLAYER') return;
-      if (picker === 'DEALER' && gameStateRef.current.turnOwner !== 'DEALER' && !isMP) return;
-      if (picker === 'PLAYER3' && gameStateRef.current.turnOwner !== 'PLAYER3' && !isMP) return;
-      if (picker === 'PLAYER4' && gameStateRef.current.turnOwner !== 'PLAYER4' && !isMP) return;
-
-      if (picker === 'PLAYER') {
-        setCameraView('GUN');
-        setAimTarget('CHOOSING');
-      } else if (picker === 'PLAYER3') {
-        setCameraView('PLAYER3_GUN');
-        setAimTarget('IDLE');
-      } else if (picker === 'PLAYER4') {
-        setCameraView('PLAYER4_GUN');
-        setAimTarget('IDLE');
-      } else {
-        setCameraView('DEALER_GUN');
-        setAimTarget('IDLE');
-      }
-    },
+    pickupGun,
+    dropGun,
     syncState: (data: { player: PlayerState, dealer: PlayerState, player3?: PlayerState, player4?: PlayerState, gameState: Partial<GameState> }) => {
       if (data.player) setPlayer(p => ({ ...p, ...data.player }));
       if (data.dealer) setDealer(d => ({ ...d, ...data.dealer }));
