@@ -490,8 +490,10 @@ export const handleAdrenaline = async (
     setGameState: StateSetter<GameState>,
     addLog: (text: string, type: LogEntry['type']) => void,
     setOverlayText?: StateSetter<string | null>,
-    setOverlayColor?: StateSetter<'none' | 'red' | 'green' | 'scan'>
+    setOverlayColor?: StateSetter<'none' | 'red' | 'green' | 'scan'>,
+    actorDisplayName?: string
 ) => {
+    const actorName = actorDisplayName?.trim() || (user === 'PLAYER' ? 'YOU' : 'DEALER');
     setTriggerAdrenaline(p => p + 1);
     // audioManager.playSound('grab', { playbackRate: 1.0 }); // Normal grab
 
@@ -505,7 +507,7 @@ export const handleAdrenaline = async (
 
     // Show message AFTER animation plays
     if (setOverlayText) {
-        setOverlayText(user === 'PLAYER' ? '⚡ ADRENALINE RUSH ⚡' : '💉 DEALER SURGE');
+        setOverlayText(user === 'PLAYER' ? '⚡ ADRENALINE RUSH ⚡' : `💉 ${actorName.toUpperCase()} SURGE`);
         setTimeout(() => setOverlayText?.(null), 2000);
     }
 
@@ -515,7 +517,7 @@ export const handleAdrenaline = async (
         addLog("TIME SLOWS DOWN... PICK AN ITEM TO STEAL", 'danger');
         setGameState(prev => ({ ...prev, phase: 'STEALING' }));
     } else {
-        addLog("DEALER MOVING WITH UNNATURAL SPEED", 'dealer');
+        addLog(`${actorName.toUpperCase()} MOVING WITH UNNATURAL SPEED`, 'dealer');
         // Dealer logic handles its own stealing flow in useDealerAI
     }
     await wait(300); // Final sync
@@ -720,5 +722,4 @@ export const handleCrusher = async (
 
     await wait(900); // Wait for remainder of 2.2s animation
 };
-
 

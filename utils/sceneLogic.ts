@@ -11,6 +11,7 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
     const { gunGroup, camera, dealerGroup, shellCasings, shellVelocities, scene, bulletMesh, bloodParticles, sparkParticles, dustParticles, bulbLight, mouse, renderer, muzzleFlash, baseLights, gunLight, underLight } = context;
     const { turnOwner, aimTarget, cameraView, settings, animState, gameState, player, dealer } = props;
     const { phase } = gameState;
+    const usesFixedMultiplayerSeatCamera = !!gameState.isMultiplayer && !!(gameState.isThreePlayer || gameState.isFourPlayer);
     const isMobile = scene.userData.isMobile;
     const reduceEffects = !!scene.userData.performanceMode;
     const hasActiveVisualEffects = !!(
@@ -439,6 +440,10 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
         targetCamPos.set(2.8, 0.8, 10.5);
     } else if (cameraView === 'TABLE') {
         targetCamPos.set(0, 10, 4);
+    } else if (usesFixedMultiplayerSeatCamera) {
+        // In 3-4 player games, keep every client at its own seat. The gun and
+        // player animations still move around the table independently.
+        targetCamPos.set(pSwayX * 0.25, 3.8 + pSwayY * 0.35, 12);
     } else if (cameraView === 'DEALER_GUN') {
         // Look at the dealer holding the gun
         targetCamPos.set(pSwayX * 0.5 - 4, 3 + pSwayY * 0.2, 5);
@@ -479,6 +484,10 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
         lookAtPos.set(-0.5, 3.8, -8);
     } else if (cameraView === 'TABLE') {
         lookAtPos.set(0, 0, 0);
+    } else if (usesFixedMultiplayerSeatCamera) {
+        // A wide table-centred view keeps all remote actions readable without
+        // moving the camera to whichever seat currently owns the turn.
+        lookAtPos.set(0, 1.5, -2);
     } else if (cameraView === 'DEALER_GUN') {
         lookAtPos.set(-0.5, 2, -6); // Look at dealer's chest/gun area
     } else if (cameraView === 'PLAYER3_GUN') {

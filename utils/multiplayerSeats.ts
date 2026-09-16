@@ -55,6 +55,29 @@ export const normalizePlayerReference = (
   return playerIdToOwner(playerOrOwner, localPlayerId, players);
 };
 
+export const replaceSeatLabelsWithPlayerNames = (
+  text: string,
+  localPlayerId: string,
+  players: MultiplayerPlayer[]
+): string => {
+  if (!localPlayerId || players.length < 2) return text;
+  const fallbackNames: Record<TurnOwner, string> = {
+    PLAYER: 'PLAYER',
+    DEALER: 'DEALER',
+    PLAYER3: 'PLAYER3',
+    PLAYER4: 'PLAYER4',
+  };
+  const namesByOwner = (Object.keys(fallbackNames) as TurnOwner[]).reduce<Record<TurnOwner, string>>((names, owner) => {
+    const absolutePlayerId = ownerToPlayerId(owner, localPlayerId, players);
+    names[owner] = players.find(player => player.id === absolutePlayerId)?.name?.toUpperCase() || owner;
+    return names;
+  }, { ...fallbackNames });
+
+  return text.replace(/\b(PLAYER4|PLAYER3|DEALER|PLAYER)\b/gi, label => (
+    namesByOwner[label.toUpperCase() as TurnOwner] || label
+  ));
+};
+
 export const aimForOwner = (owner: TurnOwner): AimTarget => {
   if (owner === 'PLAYER') return 'SELF';
   if (owner === 'PLAYER3') return 'LEFT';

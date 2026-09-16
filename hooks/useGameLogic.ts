@@ -7,7 +7,7 @@ import { audioManager } from '../utils/audioManager';
 import { performShot } from '../utils/game/shooting';
 import { distributeItems as distributeItemsAction, getRandomItem, resolveJackpotOutcome } from '../utils/game/inventory';
 import { MatchStats } from '../utils/statsManager';
-import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner } from '../utils/multiplayerSeats';
+import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner, replaceSeatLabelsWithPlayerNames } from '../utils/multiplayerSeats';
 
 export const useGameLogic = () => {
   // --- State ---
@@ -229,6 +229,13 @@ export const useGameLogic = () => {
   const [receivedItems, setReceivedItems] = useState<ItemType[]>([]);
   const [showLootOverlay, setShowLootOverlay] = useState(false);
 
+  const personalizeMultiplayerSeatLabels = (text: string): string => {
+    if (!gameStateRef.current.isMultiplayer) return text;
+    const players = gameStateRef.current.multiplayerState?.players || [];
+    const localPlayerId = gameStateRef.current.localPlayerId || '';
+    return replaceSeatLabelsWithPlayerNames(text, localPlayerId, players);
+  };
+
   const setOverlayText = (nextValue: React.SetStateAction<string | null>) => {
     const resolvedValue = typeof nextValue === 'function'
       ? (nextValue as (prevState: string | null) => string | null)(overlayText)
@@ -239,7 +246,7 @@ export const useGameLogic = () => {
       overlayHideTimeoutRef.current = null;
     }
     setOverlayTextUpdatedAt(Date.now());
-    setOverlayTextState(resolvedValue);
+    setOverlayTextState(resolvedValue === null ? null : personalizeMultiplayerSeatLabels(resolvedValue));
   };
 
   const getOpponentName = () => {
@@ -263,7 +270,7 @@ export const useGameLogic = () => {
   };
 
   const addLog = (text: string, type: LogEntry['type'] = 'neutral') => {
-    setLogs(prev => [...prev, { id: Date.now() + Math.random(), text, type }]);
+    setLogs(prev => [...prev, { id: Date.now() + Math.random(), text: personalizeMultiplayerSeatLabels(text), type }]);
   };
 
   const resetTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -883,13 +890,17 @@ export const useGameLogic = () => {
       return;
     }
     setAimTarget(owner === 'PLAYER' ? 'CHOOSING' : 'IDLE');
+    const usesFixedMultiplayerSeatCamera = gameStateRef.current.isMultiplayer
+      && (gameStateRef.current.isThreePlayer || gameStateRef.current.isFourPlayer);
     const ownerCamera: CameraView = owner === 'PLAYER'
       ? 'GUN'
-      : owner === 'PLAYER3'
-        ? 'PLAYER3_GUN'
-        : owner === 'PLAYER4'
-          ? 'PLAYER4_GUN'
-          : 'DEALER_GUN';
+      : usesFixedMultiplayerSeatCamera
+        ? 'PLAYER'
+        : owner === 'PLAYER3'
+          ? 'PLAYER3_GUN'
+          : owner === 'PLAYER4'
+            ? 'PLAYER4_GUN'
+            : 'DEALER_GUN';
     setCameraView(ownerCamera);
   };
 
@@ -1449,7 +1460,7 @@ export const useGameLogic = () => {
             case 'ADRENALINE':
                 await ItemActions.handleAdrenaline(user,
                     (v) => setAnim(p => ({ ...p, triggerAdrenaline: typeof v === 'function' ? v(p.triggerAdrenaline) : v })),
-                    setGameState, addLog, setOverlayText, setOverlayColor
+                    setGameState, addLog, setOverlayText, setOverlayColor, userName
                 );
                 break;
 
@@ -1750,7 +1761,7 @@ export const useGameLogic = () => {
       case 'ADRENALINE':
         await ItemActions.handleAdrenaline(user,
           (v) => setAnim(p => ({ ...p, triggerAdrenaline: typeof v === 'function' ? v(p.triggerAdrenaline) : v })),
-          setGameState, addLog, setOverlayText, setOverlayColor
+          setGameState, addLog, setOverlayText, setOverlayColor, userName
         );
         await wait(500); // Pause before next action
         await wait(500); // Pause before next action
