@@ -8,6 +8,7 @@ import { performShot } from '../utils/game/shooting';
 import { distributeItems as distributeItemsAction, getRandomItem, resolveJackpotOutcome } from '../utils/game/inventory';
 import { MatchStats } from '../utils/statsManager';
 import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner, replaceSeatLabelsWithPlayerNames } from '../utils/multiplayerSeats';
+import { resolveShotVolley } from '../utils/game/shotVolley';
 
 export const useGameLogic = () => {
   // --- State ---
@@ -990,8 +991,21 @@ export const useGameLogic = () => {
       await wait(500);
 
       const currentChamberIdx = gameStateRef.current.currentShellIndex;
-      const currentShell = gameStateRef.current.chamber[currentChamberIdx];
-      const isLive = currentShell === 'LIVE';
+      const shooterState = getPlayerState(shooter);
+      const volley = resolveShotVolley(
+        gameStateRef.current.chamber,
+        currentChamberIdx,
+        Boolean(shooterState.isChokeActive),
+        Boolean(shooterState.isSawedActive)
+      );
+      const isLive = volley.anyLive;
+      const processedShells = volley.processedShells;
+
+      if (processedShells === 0) {
+        setGameState(prev => ({ ...prev, phase: 'RESOLVING' }));
+        onBatchEndRef.current?.(false);
+        return;
+      }
 
       if (isLive) {
         audioManager.playSound('liveshellshoot');
@@ -1002,7 +1016,7 @@ export const useGameLogic = () => {
       setAnim(p => ({
         ...p,
         triggerRecoil: p.triggerRecoil + 1,
-        muzzleFlashIntensity: isLive ? 100 : 0,
+        muzzleFlashIntensity: isLive ? (processedShells === 2 ? 150 : 100) : 0,
         isLiveShot: isLive
       }));
       setTimeout(() => {
@@ -1018,16 +1032,15 @@ export const useGameLogic = () => {
       const targetName = getPlayerNameByOwner(resolvedTargetOwner);
       const shooterName = getPlayerNameByOwner(shooter);
 
-      let damage = 0;
-      let isDead = false;
+      let damage = volley.damage;
+      const targetImmune = (targetState.jackpotImmunityShots || 0) > 0;
+      const targetHasTotem = targetState.items.includes('TOTEM') && !targetState.isFlashbanged;
+      let finalTargetHp = targetState.hp;
 
       if (isLive) {
-        const isSawed = getPlayerState(shooter).isSawedActive;
-        const targetImmune = targetState.jackpotImmunityShots !== undefined && targetState.jackpotImmunityShots > 0;
-        
         if (targetImmune) {
           targetSetter(p => {
-            const nextImmunity = Math.max(0, (p.jackpotImmunityShots || 0) - 1);
+            const nextImmunity = Math.max(0, (p.jackpotImmunityShots || 0) - processedShells);
             return {
               ...p,
               jackpotImmunityShots: nextImmunity,
@@ -1036,11 +1049,9 @@ export const useGameLogic = () => {
           });
           addLog(`${targetName.toUpperCase()}'S JACKPOT SHIELD BLOCKED SHOT!`, 'safe');
         } else {
-          damage = isSawed ? 2 : 1;
           const newHp = Math.max(0, targetState.hp - damage);
-          
-          const hasTotem = targetState.items.includes('TOTEM');
-          if (newHp <= 0 && hasTotem) {
+
+          if (newHp <= 0 && targetHasTotem) {
             targetSetter(p => {
               const items = [...p.items];
               const tIdx = items.indexOf('TOTEM');
@@ -1053,11 +1064,10 @@ export const useGameLogic = () => {
             audioManager.playSound('totem');
             await wait(3000);
             setOverlayText(null);
+            finalTargetHp = 1;
           } else {
             targetSetter(p => ({ ...p, hp: newHp }));
-            if (newHp <= 0) {
-              isDead = true;
-            }
+            finalTargetHp = newHp;
           }
         }
 
@@ -1087,28 +1097,15 @@ export const useGameLogic = () => {
           setAnim(p => ({ ...p, player4Recovering: false }));
         }
       } else {
-        addLog("...CLICK. IT'S A BLANK.", 'safe');
-        setOverlayText("...CLICK. BLANK.");
+        const blankMessage = processedShells === 2 ? '...DOUBLE CLICK. 2 BLANKS.' : "...CLICK. IT'S A BLANK.";
+        addLog(blankMessage, 'safe');
+        setOverlayText(processedShells === 2 ? '...DOUBLE CLICK. 2 BLANKS.' : '...CLICK. BLANK.');
         await wait(1500);
         setOverlayText(null);
       }
 
-      // Calculate final target HP after this shot to check if the round ended
-      let finalTargetHp = targetState.hp;
-      if (isLive) {
-        const isSawed = getPlayerState(shooter).isSawedActive;
-        const targetImmune = targetState.jackpotImmunityShots !== undefined && targetState.jackpotImmunityShots > 0;
-        
-        if (!targetImmune) {
-          const dmg = isSawed ? 2 : 1;
-          const newHp = Math.max(0, targetState.hp - dmg);
-          const hasTotem = targetState.items.includes('TOTEM');
-          if (newHp <= 0 && hasTotem) {
-            finalTargetHp = 1;
-          } else {
-            finalTargetHp = newHp;
-          }
-        }
+      if (processedShells === 2) {
+        addLog(`CHOKE FIRED ${volley.shells.join(' + ')} (${volley.liveShells} LIVE)`, isLive ? 'danger' : 'safe');
       }
 
       const postPlayerHp = target === 'PLAYER' ? finalTargetHp : playerRef.current.hp;
@@ -1129,7 +1126,7 @@ export const useGameLogic = () => {
       const aliveCount = aliveOwners.length;
 
       const shooterSetter = getPlayerSetter(shooter);
-      shooterSetter(p => ({ ...p, isSawedActive: false, isFlashbanged: false }));
+      shooterSetter(p => ({ ...p, isSawedActive: false, isChokeActive: false, isFlashbanged: false }));
 
       if (aliveCount <= 1) {
         setIsProcessing(true);
@@ -1152,7 +1149,7 @@ export const useGameLogic = () => {
         return;
       }
 
-      const nextShellIndex = currentChamberIdx + 1;
+      const nextShellIndex = currentChamberIdx + processedShells;
       const remaining = gameStateRef.current.chamber.length - nextShellIndex;
       const liveCount = gameStateRef.current.chamber.slice(nextShellIndex).filter(s => s === 'LIVE').length;
       const blankCount = gameStateRef.current.chamber.slice(nextShellIndex).filter(s => s === 'BLANK').length;
@@ -1186,10 +1183,11 @@ export const useGameLogic = () => {
           
           const getNewHp = (id: string) => {
             const relativeOwner = resolveTargetOwner(id, myId, mPlayers);
-            if (relativeOwner === 'PLAYER') return playerRef.current.hp - (resolvedTargetOwner === 'PLAYER' && isLive && !targetState.items.includes('TOTEM') && (targetState.jackpotImmunityShots || 0) <= 0 ? damage : 0);
-            if (relativeOwner === 'PLAYER3') return player3Ref.current.hp - (resolvedTargetOwner === 'PLAYER3' && isLive && !targetState.items.includes('TOTEM') && (targetState.jackpotImmunityShots || 0) <= 0 ? damage : 0);
-            if (relativeOwner === 'PLAYER4') return player4Ref.current.hp - (resolvedTargetOwner === 'PLAYER4' && isLive && !targetState.items.includes('TOTEM') && (targetState.jackpotImmunityShots || 0) <= 0 ? damage : 0);
-            return dealerRef.current.hp - (resolvedTargetOwner === 'DEALER' && isLive && !targetState.items.includes('TOTEM') && (targetState.jackpotImmunityShots || 0) <= 0 ? damage : 0);
+            const appliedDamage = targetImmune || targetHasTotem ? 0 : damage;
+            if (relativeOwner === 'PLAYER') return playerRef.current.hp - (resolvedTargetOwner === 'PLAYER' ? appliedDamage : 0);
+            if (relativeOwner === 'PLAYER3') return player3Ref.current.hp - (resolvedTargetOwner === 'PLAYER3' ? appliedDamage : 0);
+            if (relativeOwner === 'PLAYER4') return player4Ref.current.hp - (resolvedTargetOwner === 'PLAYER4' ? appliedDamage : 0);
+            return dealerRef.current.hp - (resolvedTargetOwner === 'DEALER' ? appliedDamage : 0);
           };
 
           while (getNewHp(mPlayers[nextIdx].id) <= 0) {
@@ -1607,15 +1605,27 @@ export const useGameLogic = () => {
                 setOverlayText(null);
                 break;
 
-            case 'CONTRACT':
+            case 'CONTRACT': {
+                const preContractState = getPlayerState(user);
+                const hasJackpotShield = (preContractState.jackpotImmunityShots || 0) > 0;
+                const hasUsableTotem = preContractState.items.includes('TOTEM') && !preContractState.isFlashbanged;
+                const contractEliminatesUser = !hasJackpotShield && preContractState.hp <= 1 && !hasUsableTotem;
+
                 userSetter(p => {
-                    const curHp = p.hp;
-                    const hasTotem = p.items.includes('TOTEM');
-                    let nextHp = curHp - 1;
+                    if ((p.jackpotImmunityShots || 0) > 0) {
+                        const nextImmunity = Math.max(0, (p.jackpotImmunityShots || 0) - 1);
+                        return {
+                            ...p,
+                            jackpotImmunityShots: nextImmunity,
+                            hasJackpotWinActive: nextImmunity > 0 ? p.hasJackpotWinActive : false
+                        };
+                    }
+
+                    let nextHp = p.hp - 1;
                     let items = [...p.items];
 
                     if (nextHp <= 0) {
-                        if (hasTotem) {
+                        if (p.items.includes('TOTEM') && !p.isFlashbanged) {
                             nextHp = 1;
                             const tIdx = items.indexOf('TOTEM');
                             if (tIdx !== -1) items.splice(tIdx, 1);
@@ -1631,8 +1641,7 @@ export const useGameLogic = () => {
                 addLog(`${userName.toUpperCase()} SIGNED BLOOD CONTRACT`, 'danger');
                 await wait(2500);
 
-                const preContractState = getPlayerState(user);
-                const survivesContract = preContractState.hp > 1 || preContractState.items.includes('TOTEM');
+                const survivesContract = !contractEliminatesUser;
                 if (survivesContract) {
                     const loot = contractLootOverride || [
                         getRandomItem(gameStateRef.current.isHardMode, user === 'DEALER'),
@@ -1643,7 +1652,7 @@ export const useGameLogic = () => {
                         loot.forEach(l => {
                             if (items.length < MAX_ITEMS) items.push(l);
                         });
-                        return { ...p, items };
+                        return { ...p, items, luckycharmsUsed: 0 };
                     });
                     addLog(`${userName.toUpperCase()} GAINED: ${loot.join(', ')}`, 'safe');
                     setOverlayText(`🩸 BLOOD CONTRACT SIGNED!\nGAINED: ${loot.join(', ')}`);
@@ -1653,7 +1662,31 @@ export const useGameLogic = () => {
                 }
                 await wait(2200);
                 setOverlayText(null);
+
+                if (contractEliminatesUser) {
+                    const playerCount = players.length || (gameStateRef.current.isFourPlayer ? 4 : 3);
+                    const activeOwners = ownersForPlayerCount(playerCount);
+                    const hpAfterContract = (owner: TurnOwner) => owner === user ? 0 : getPlayerState(owner).hp;
+                    const aliveOwners = activeOwners.filter(owner => hpAfterContract(owner) > 0);
+
+                    if (aliveOwners.length <= 1) {
+                        const winner = aliveOwners[0] || nextAliveOwner(user, playerCount, hpAfterContract);
+                        setGameState(prev => ({ ...prev, phase: 'RESOLVING' }));
+                        if (onMPRoundEndRef.current) {
+                            await onMPRoundEndRef.current(winner);
+                        }
+                        return true;
+                    }
+
+                    const nextOwner = nextAliveOwner(user, playerCount, hpAfterContract);
+                    setGameState(prev => ({
+                        ...prev,
+                        turnOwner: nextOwner,
+                        phase: phaseForOwner(nextOwner)
+                    }));
+                }
                 break;
+            }
         }
 
         return false;
@@ -2007,6 +2040,17 @@ export const useGameLogic = () => {
           setOverlayText(null);
           return;
         }
+      }
+    }
+
+    if (item === 'CHOKE') {
+      const remainingShells = gameStateRef.current.chamber.length - gameStateRef.current.currentShellIndex;
+      if (remainingShells < 2) {
+        addLog('CHOKE REQUIRES AT LEAST 2 SHELLS', 'info');
+        setOverlayText('CHOKE NEEDS 2 SHELLS');
+        await wait(1500);
+        setOverlayText(null);
+        return;
       }
     }
 

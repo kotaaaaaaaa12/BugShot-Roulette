@@ -20,7 +20,7 @@ import { useMultiplayer } from './hooks/useMultiplayer';
 import { MultiplayerLobby } from './components/MultiplayerLobby';
 import { ChatBox } from './components/ChatBox';
 import { MultiplayerSelection } from './components/MultiplayerSelection';
-import { generateLootBatch, resolveJackpotOutcome } from './utils/game/inventory';
+import { generateLootBatch, resolveJackpotOutcome, resolveShipmentItemCount } from './utils/game/inventory';
 import { randomInt } from './utils/gameUtils';
 import { ShellType, ItemType, TurnOwner, AimTarget } from './types';
 import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, phaseForOwner } from './utils/multiplayerSeats';
@@ -463,6 +463,11 @@ export default function App() {
     if (appState === 'GAME' && spGame.gameState.isMultiplayer) {
       if (spGame.gameState.turnOwner !== 'PLAYER') return;
       const item = spGame.player.items[index];
+
+      if (item === 'CHOKE' && spGame.gameState.chamber.length - spGame.gameState.currentShellIndex < 2) {
+        await spGame.usePlayerItem(index, undefined, undefined, undefined, undefined, undefined, targetPlayerId);
+        return;
+      }
       
       let deckCards: string[] | undefined;
       let jackpotOutcome: 'JACKPOT' | 'NORMAL' | 'LOSE' | undefined;
@@ -900,8 +905,8 @@ export default function App() {
                       false,
                       undefined,
                       action.chamber,
-                      action.resetItems ? myItems : [...spGame.player.items, ...myItems].slice(0, 8),
-                      action.resetItems ? frontItems : [...spGame.dealer.items, ...frontItems].slice(0, 8),
+                      myItems,
+                      frontItems,
                       relTurnOwner,
                       action.hp,
                       undefined,
@@ -1215,19 +1220,7 @@ export default function App() {
       [chamber[i], chamber[j]] = [chamber[j], chamber[i]];
     }
 
-    let itemsCount = settings.itemsPerShipment;
-    if (settings.itemsPerShipment === 9) {
-      // Weighted roll: 1 (5%), 2 (25%), 3 (25%), 4 (20%), 5 (15%), 6 (7%), 7 (2.5%), 8 (0.5%)
-      const r = Math.random();
-      if (r < 0.05) itemsCount = 1;
-      else if (r < 0.30) itemsCount = 2;
-      else if (r < 0.55) itemsCount = 3;
-      else if (r < 0.75) itemsCount = 4;
-      else if (r < 0.90) itemsCount = 5;
-      else if (r < 0.97) itemsCount = 6;
-      else if (r < 0.995) itemsCount = 7;
-      else itemsCount = 8;
-    }
+    const itemsCount = resolveShipmentItemCount(settings.itemsPerShipment, Math.random(), 2);
     const hostItems = generateLootBatch(itemsCount, false, false, 4, [], hostCharms, 4, 4, settings, playerCount);
     const clientItems = generateLootBatch(itemsCount, false, false, 4, [], clientCharms, 4, 4, settings, playerCount);
 
@@ -1249,7 +1242,7 @@ export default function App() {
         [chamber[i], chamber[j]] = [chamber[j], chamber[i]];
       }
 
-      const itemsCount = settings.itemsPerShipment || 2;
+      const itemsCount = resolveShipmentItemCount(settings.itemsPerShipment, Math.random(), 2);
       const lootBatches: any[] = [];
       for (let i = 0; i < playerCount; i++) {
         lootBatches.push(generateLootBatch(itemsCount, false, false, 4, [], playerCharms[i] || 0, 4, 4, settings, playerCount));
@@ -1356,8 +1349,8 @@ export default function App() {
               false,
               undefined,
               chamber,
-              [...spGame.player.items, ...myItems].slice(0, 8),
-              [...spGame.dealer.items, ...frontItems].slice(0, 8),
+              myItems,
+              frontItems,
               spGame.gameState.turnOwner,
               undefined,
               undefined,

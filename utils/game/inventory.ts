@@ -30,6 +30,24 @@ export const resolveJackpotOutcome = (random: number = Math.random()): 'JACKPOT'
     return 'LOSE';
 };
 
+export const resolveShipmentItemCount = (
+    configured: number | undefined,
+    random: number = Math.random(),
+    fallback: number = 4
+): number => {
+    if (configured === undefined || configured === null) return fallback;
+    if (configured !== 9) return Math.max(0, Math.min(8, configured));
+
+    if (random < 0.05) return 1;
+    if (random < 0.30) return 2;
+    if (random < 0.55) return 3;
+    if (random < 0.75) return 4;
+    if (random < 0.90) return 5;
+    if (random < 0.97) return 6;
+    if (random < 0.995) return 7;
+    return 8;
+};
+
 type StateSetter<T> = React.Dispatch<React.SetStateAction<T>>;
 
 // From useGameLogic
@@ -330,7 +348,7 @@ export const distributeItems = async (
     let amount = 2;
 
     if (gameState.isMultiplayer && gameState.roomSettings) {
-        amount = gameState.roomSettings.itemsPerShipment || 4;
+        amount = resolveShipmentItemCount(gameState.roomSettings.itemsPerShipment);
     } else if (gameState.isHardMode) {
         // HARD MODE LOGIC
         const currentStage = gameState.hardModeState?.round || 1;

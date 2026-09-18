@@ -189,16 +189,14 @@ export const handleContract = async (
 
     if (setOverlayText) {
         setOverlayText(`🩸 BLOOD ACCEPTED 🩸\n${userName} SACRIFICED 1 HP`);
-        setTimeout(() => {
-            if (setOverlayText) {
-                setOverlayText(`${userName} OFFERING:\n${itemNames}`);
-                setTimeout(() => setOverlayText?.(null), 2500);
-            }
-        }, 2500);
+        await wait(2500);
+        setOverlayText(`${userName} OFFERING:\n${itemNames}`);
+        await wait(2500);
+        setOverlayText(null);
     }
 
     addLog(`${userName} SACRIFICED HP FOR: ${itemNames}`, 'danger');
-    await wait(1000);
+    await wait(300);
 };
 
 export const handleBeer = async (
@@ -363,7 +361,8 @@ export const handlePhone = async (
             addLog("📞 NO INTEL AVAILABLE", 'neutral');
             if (setOverlayText) {
                 setOverlayText(msg);
-                setTimeout(() => setOverlayText?.(null), 2500);
+                await wait(2500);
+                setOverlayText(null);
             }
         } else {
             addLog("DEALER CHECKS PHONE", 'dealer');
@@ -388,14 +387,15 @@ export const handlePhone = async (
             addLog(`${positionText} IS ${displayedShell}`, 'info');
             if (setOverlayText) {
                 setOverlayText(displayText);
-                setTimeout(() => setOverlayText?.(null), 3000);
+                await wait(3000);
+                setOverlayText(null);
             }
         } else {
             // Dealer gets the REAL info (AI knows truth)
             addLog(`DEALER USES PHONE`, 'dealer');
         }
     }
-    await wait(2500); // Wait for full phone animation and result display
+    await wait(300);
 };
 
 export const handleInverter = async (
@@ -432,7 +432,8 @@ export const handleInverter = async (
     // Display POLARITY CHANGED message on screen
     if (setOverlayText) {
         setOverlayText('⚡ POLARITY CHANGED ⚡');
-        setTimeout(() => setOverlayText(null), 2000);
+        await wait(2000);
+        setOverlayText(null);
     }
 
     await wait(800); // Final sync
@@ -478,7 +479,8 @@ export const handleBigInverter = async (
 
     if (setOverlayText) {
         setOverlayText('⚡ TOTAL POLARITY REVERSAL ⚡');
-        setTimeout(() => setOverlayText(null), 2500);
+        await wait(2500);
+        setOverlayText(null);
     }
 
     await wait(800);
@@ -508,7 +510,8 @@ export const handleAdrenaline = async (
     // Show message AFTER animation plays
     if (setOverlayText) {
         setOverlayText(user === 'PLAYER' ? '⚡ ADRENALINE RUSH ⚡' : `💉 ${actorName.toUpperCase()} SURGE`);
-        setTimeout(() => setOverlayText?.(null), 2000);
+        await wait(2000);
+        setOverlayText(null);
     }
 
     await wait(500); // Pause before phase change
@@ -567,7 +570,8 @@ export const handleRemote = async (
         addLog(`${user} SWAPPED SHELL ORDER`, 'info');
         if (setOverlayText) {
             setOverlayText('↻ CHAMBER CYCLED ↻');
-            setTimeout(() => setOverlayText(null), 2000);
+            await wait(2000);
+            setOverlayText(null);
         }
     } else {
         addLog(`${user} TRIED REMOTE (FAILED)`, 'neutral');
@@ -591,7 +595,8 @@ export const handleLuckycharm = async (
         setPlayer(p => ({ ...p, luckycharmsUsed: (p.luckycharmsUsed || 0) + 1 }));
         if (setOverlayText) {
             setOverlayText('🍀 LUCK CHARMED 🍀\nHope you will get better items');
-            setTimeout(() => setOverlayText(null), 2500);
+            await wait(2500);
+            setOverlayText(null);
         }
         addLog("YOU ACTIVATED LUCKY CHARM: Next shipment improved", 'safe');
     } else {
@@ -623,20 +628,20 @@ export const handleFlashbang = async (
         setDealer(d => ({ ...d, isFlashbanged: true }));
         if (setOverlayText) {
             setOverlayText('💥 FLASHBANGED 💥\nOpponent cannot use items next turn');
-            setTimeout(() => setOverlayText(null), 2500);
         }
         addLog("YOU FLASHBANGED THE DEALER: Items blocked on their next turn", 'safe');
     } else {
         setPlayer(p => ({ ...p, isFlashbanged: true }));
         if (setOverlayText) {
             setOverlayText('💥 BLINDED! 💥\nYou cannot use items next turn');
-            setTimeout(() => setOverlayText(null), 2500);
         }
         addLog("DEALER FLASHBANGED YOU: Items blocked on your next turn", 'danger');
     }
 
     await wait(1800); // Let the screen blind fade out
     if (setShowFlashbang) setShowFlashbang(false);
+    await wait(700);
+    if (setOverlayText) setOverlayText(null);
 };
 
 const getFriendlyItemName = (item: ItemType): string => {
@@ -687,7 +692,8 @@ export const handleCrusher = async (
     if (target.items.length === 0) {
         if (setOverlayText) {
             setOverlayText(user === 'PLAYER' ? "Dealer's inventory is empty!" : "Your inventory is empty!");
-            setTimeout(() => setOverlayText(null), 2000);
+            await wait(2000);
+            setOverlayText(null);
         }
         addLog(user === 'PLAYER' ? "YOU USED CRUSHER: Opponent has no items to destroy!" : "DEALER USED CRUSHER: You have no items to destroy!", 'safe');
         await wait(900); // Wait for remainder of 2.2s animation
@@ -711,7 +717,8 @@ export const handleCrusher = async (
     if (setOverlayText) {
         const ownerName = user === 'PLAYER' ? "Dealer's" : "Player's";
         setOverlayText(`DESTROYED_ITEM::${itemToDestroy}::${ownerName}::${friendlyName}`);
-        setTimeout(() => setOverlayText(null), 4000);
+        await wait(4000);
+        setOverlayText(null);
     }
 
     if (user === 'PLAYER') {
@@ -720,6 +727,5 @@ export const handleCrusher = async (
         addLog(`DEALER CRUSHED YOUR ITEM: Destroyed 1 ${friendlyName}`, 'danger');
     }
 
-    await wait(900); // Wait for remainder of 2.2s animation
+    await wait(300);
 };
-
