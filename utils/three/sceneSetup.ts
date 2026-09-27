@@ -365,7 +365,6 @@ export const initThreeScene = (container: HTMLElement, props: any): SceneContext
         if (myIndex !== -1) {
             const frontOpponent = players[(myIndex + 2) % 3];
             const sideOpponent  = players[(myIndex + 1) % 3];
-            const sidePos = myIndex === 1 ? 'right' : 'left';
 
             // Front player -> DEALER
             const frontIndex = players.findIndex((p: any) => p.id === frontOpponent?.id);
@@ -376,12 +375,10 @@ export const initThreeScene = (container: HTMLElement, props: any): SceneContext
             dealerGroup.name = 'DEALER';
 
             // Side player -> PLAYER3
-            const sideX   = sidePos === 'left' ? -8 : 8;
-            const sideRot = sidePos === 'left' ? Math.PI / 2 : -Math.PI / 2;
-            player3Group = createPlayerAvatar(scene, new THREE.Vector3(sideX, -4.5, -2), sideRot,
-                sideOpponent.name, 4, 4, getModelForSeat('left', sideIndex, sideOpponent?.id));
+            player3Group = createPlayerAvatar(scene, new THREE.Vector3(8, -4.5, -2), -Math.PI / 2,
+                sideOpponent.name, 4, 4, getModelForSeat('right', sideIndex, sideOpponent?.id));
             player3Group.name = 'PLAYER3';
-            scene.userData.player3Side = sidePos;
+            scene.userData.player3Side = 'right';
         } else {
             dealerGroup = createPlayerAvatar(scene, new THREE.Vector3(0, -4.5, -8), Math.PI,
                 'OPPONENT 1', 4, 4, getDefaultModelForPlayer(undefined, 'dealer'));

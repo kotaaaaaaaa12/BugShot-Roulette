@@ -123,8 +123,6 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                             const sideOpponent = players[(myIndex + 1) % size];
                             const leftOpponent = sideOpponent;
                             const rightOpponent = size >= 4 ? players[(myIndex + 3) % size] : null;
-                            const sidePos = myIndex === 1 ? 'right' : 'left';
-
                             const isMobile = window.matchMedia('(pointer: coarse)').matches;
 
                             const handleChooseOpponent = (relTarget: TurnOwner, intendedAim: AimTarget, oppId: string) => {
@@ -175,7 +173,7 @@ const ControlsComponent: React.FC<ControlsProps> = ({
 
                                     {/* Row 2: Left Player, Self, Right Player */}
                                     <div className="col-start-1 row-start-2 flex justify-center">
-                                        {((size === 4 && leftOpponent) || (size === 3 && sidePos === 'left' && sideOpponent)) && (
+                                        {size === 4 && leftOpponent && (
                                             <button
                                                 onClick={() => {
                                                     if ((size === 4 ? leftOpponent! : sideOpponent).isAlive === false) return;
@@ -210,7 +208,7 @@ const ControlsComponent: React.FC<ControlsProps> = ({
                                     </div>
 
                                     <div className="col-start-3 row-start-2 flex justify-center">
-                                        {((size === 4 && rightOpponent) || (size === 3 && sidePos === 'right' && sideOpponent)) && (
+                                        {((size === 4 && rightOpponent) || (size === 3 && sideOpponent)) && (
                                             <button
                                                 onClick={() => {
                                                     if ((size === 4 ? rightOpponent! : sideOpponent).isAlive === false) return;

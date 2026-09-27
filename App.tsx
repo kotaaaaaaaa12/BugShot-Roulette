@@ -23,7 +23,7 @@ import { MultiplayerSelection } from './components/MultiplayerSelection';
 import { generateLootBatch, resolveJackpotOutcome, resolveShipmentItemCount } from './utils/game/inventory';
 import { randomInt } from './utils/gameUtils';
 import { ShellType, ItemType, TurnOwner, AimTarget } from './types';
-import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, phaseForOwner } from './utils/multiplayerSeats';
+import { aimForOwner, nextAliveOwner, normalizePlayerReference, ownerToPlayerId, phaseForOwner } from './utils/multiplayerSeats';
 
 const urlParams = new URLSearchParams(window.location.search);
 
@@ -419,11 +419,7 @@ export default function App() {
         else if (target === 'PLAYER4') targetPlayerId = playersList[(myIndex + 3) % playerCount]?.id || myId;
       }
 
-      const intendedAim: AimTarget = target === 'PLAYER'
-        ? 'SELF'
-        : (target === 'PLAYER3'
-          ? (playerCount === 3 && myIndex === 1 ? 'RIGHT' : 'LEFT')
-          : (target === 'PLAYER4' ? 'RIGHT' : 'OPPONENT'));
+      const intendedAim: AimTarget = aimForOwner(target, playerCount);
       if (isMobile && spGame.aimTarget !== intendedAim) {
         spGame.setAimTarget(intendedAim);
         spGame.setCameraView('GUN');
@@ -768,24 +764,24 @@ export default function App() {
                 const relTarget = action.targetId ? resolveTargetOwner(action.targetId, myId, playersList) : null;
 
                 if (relSender === 'PLAYER3') {
-                  if (relTarget === 'PLAYER3') aim = 'LEFT';
+                  if (relTarget === 'PLAYER3') aim = aimForOwner('PLAYER3', playersList.length);
                   else if (relTarget === 'PLAYER') aim = 'SELF';
                   else if (relTarget === 'DEALER') aim = 'OPPONENT';
                   else if (relTarget === 'PLAYER4') aim = 'RIGHT';
-                  else if (action.target === 'SELF') aim = 'LEFT';
+                  else if (action.target === 'SELF') aim = aimForOwner('PLAYER3', playersList.length);
                   else if (action.target === 'LEFT') aim = 'SELF';
                   else aim = 'OPPONENT';
                 } else if (relSender === 'PLAYER4') {
                   if (relTarget === 'PLAYER4') aim = 'RIGHT';
                   else if (relTarget === 'PLAYER') aim = 'SELF';
                   else if (relTarget === 'DEALER') aim = 'OPPONENT';
-                  else if (relTarget === 'PLAYER3') aim = 'LEFT';
+                  else if (relTarget === 'PLAYER3') aim = aimForOwner('PLAYER3', playersList.length);
                   else if (action.target === 'SELF') aim = 'RIGHT';
                   else aim = 'OPPONENT';
                 } else if (relSender === 'DEALER') {
                   if (relTarget === 'DEALER') aim = 'SELF';
                   else if (relTarget === 'PLAYER') aim = 'OPPONENT';
-                  else if (relTarget === 'PLAYER3') aim = 'LEFT';
+                  else if (relTarget === 'PLAYER3') aim = aimForOwner('PLAYER3', playersList.length);
                   else if (relTarget === 'PLAYER4') aim = 'RIGHT';
                   else if (action.target === 'SELF') aim = 'OPPONENT';
                   else if (action.target === 'OPPONENT') aim = 'SELF';

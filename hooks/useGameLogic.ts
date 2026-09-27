@@ -7,7 +7,7 @@ import { audioManager } from '../utils/audioManager';
 import { performShot } from '../utils/game/shooting';
 import { distributeItems as distributeItemsAction, getRandomItem, resolveJackpotOutcome } from '../utils/game/inventory';
 import { MatchStats } from '../utils/statsManager';
-import { nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner, replaceSeatLabelsWithPlayerNames } from '../utils/multiplayerSeats';
+import { aimForOwner, nextAliveOwner, normalizePlayerReference, ownerToPlayerId, ownersForPlayerCount, phaseForOwner, replaceSeatLabelsWithPlayerNames } from '../utils/multiplayerSeats';
 import { resolveShotVolley } from '../utils/game/shotVolley';
 
 export const useGameLogic = () => {
@@ -961,8 +961,7 @@ export const useGameLogic = () => {
 
     const isMultiPlayerSeat = gameStateRef.current.isThreePlayer || gameStateRef.current.isFourPlayer;
     const seatPlayers = gameStateRef.current.multiplayerState?.players || [];
-    const localSeatIndex = seatPlayers.findIndex((p: any) => p.id === gameStateRef.current.localPlayerId);
-    const player3Aim: AimTarget = seatPlayers.length === 3 && localSeatIndex === 1 ? 'RIGHT' : 'LEFT';
+    const player3Aim: AimTarget = aimForOwner('PLAYER3', seatPlayers.length);
     let intendedAim: AimTarget = 'OPPONENT';
     if (isMultiPlayerSeat) {
       if (target === shooter) {

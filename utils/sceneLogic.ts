@@ -30,6 +30,7 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
         animState.playerHit ||
         animState.dealerHit ||
         animState.player3Hit ||
+        animState.player4Hit ||
         animState.isSawing
     );
     const shouldUpdateHeavyEffects = !reduceEffects || hasActiveVisualEffects;
@@ -172,33 +173,36 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
             targets.targetRot.set(0, Math.PI / 2, 0);
         }
     } else if (turnOwner === 'PLAYER3') {
-        const isSelfTarget = aimTarget === 'LEFT';
+        const player3Side = scene.userData.player3Side || 'left';
+        const player3Aim = player3Side === 'left' ? 'LEFT' : 'RIGHT';
+        const player3X = player3Side === 'left' ? -1 : 1;
+        const isSelfTarget = aimTarget === player3Aim;
         const isPlayerTarget = aimTarget === 'SELF';
         const isDealerTarget = aimTarget === 'OPPONENT';
-        const isPlayer4Target = aimTarget === 'RIGHT';
+        const isOtherSideTarget = gameState.isFourPlayer && aimTarget === 'RIGHT';
 
         if (isSelfTarget) {
-            targets.targetPos.set(-5.5, 1.2, -2);
-            targets.targetRot.set(0.2, Math.PI / 2, 0);
+            targets.targetPos.set(player3X * 5.5, 1.2, -2);
+            targets.targetRot.set(0.2, player3X < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
             targetGunLightIntensity = 5.0;
         } else if (isDealerTarget) {
-            targets.targetPos.set(-4, 0.8, -5);
-            targets.targetRot.set(0.15, Math.PI / 3, 0);
+            targets.targetPos.set(player3X * 4, 0.8, -5);
+            targets.targetRot.set(0.15, player3X < 0 ? Math.PI / 3 : -Math.PI / 3, 0);
             targetGunLightIntensity = 5.0;
         } else if (isPlayerTarget) {
-            targets.targetPos.set(-3, 0.8, 3);
-            targets.targetRot.set(0.08, Math.PI / 6 + Math.PI / 2, 0);
+            targets.targetPos.set(player3X * 3, 0.8, 3);
+            targets.targetRot.set(0.08, player3X < 0 ? Math.PI / 6 + Math.PI / 2 : -Math.PI / 6 - Math.PI / 2, 0);
             targetGunLightIntensity = 5.0;
-        } else if (isPlayer4Target) {
+        } else if (isOtherSideTarget) {
             targets.targetPos.set(0, 0.8, -2);
-            targets.targetRot.set(0.1, Math.PI / 2, 0);
+            targets.targetRot.set(0.1, player3X < 0 ? Math.PI / 2 : -Math.PI / 2, 0);
             targetGunLightIntensity = 5.0;
         } else if (cameraView === 'PLAYER3_GUN') {
-            targets.targetPos.set(-6, 0.8, -2);
-            targets.targetRot.set(0, Math.PI / 2, Math.PI / 2);
+            targets.targetPos.set(player3X * 6, 0.8, -2);
+            targets.targetRot.set(0, player3X < 0 ? Math.PI / 2 : -Math.PI / 2, player3X < 0 ? Math.PI / 2 : -Math.PI / 2);
         } else {
-            targets.targetPos.set(-6, -0.6, -2);
-            targets.targetRot.set(0, Math.PI / 2, Math.PI / 2);
+            targets.targetPos.set(player3X * 6, -0.6, -2);
+            targets.targetRot.set(0, player3X < 0 ? Math.PI / 2 : -Math.PI / 2, player3X < 0 ? Math.PI / 2 : -Math.PI / 2);
         }
     } else if (turnOwner === 'PLAYER4') {
         const isSelfTarget = aimTarget === 'RIGHT';
@@ -241,7 +245,7 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
                 targets.targetRot.set(0, 0, 0);
                 targetGunLightIntensity = 5.0;
             } else if (aimTarget === 'LEFT' || aimTarget === 'RIGHT') {
-                const sidePos = scene.userData.player3Side || 'left';
+                const sidePos = aimTarget === 'RIGHT' ? 'right' : 'left';
                 const sideX = sidePos === 'left' ? -3.0 : 3.0;
                 const sideRot = sidePos === 'left' ? Math.PI / 4 : -Math.PI / 4;
                 targets.targetPos.set(sideX, 0.8, -4.5);
@@ -264,7 +268,7 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
                 targets.targetRot.set(0, 0, 0);
                 targetGunLightIntensity = 5.0;
             } else if (aimTarget === 'LEFT' || aimTarget === 'RIGHT') {
-                const sidePos = scene.userData.player3Side || 'left';
+                const sidePos = aimTarget === 'RIGHT' ? 'right' : 'left';
                 const sideX = sidePos === 'left' ? -3.0 : 3.0;
                 const sideRot = sidePos === 'left' ? Math.PI / 4 : -Math.PI / 4;
                 targets.targetPos.set(sideX, 2.0, -5.0);
@@ -785,8 +789,9 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
     const isDealerHit = animState.dealerHit;
     const isPlayerHit = animState.playerHit;
     const isPlayer3Hit = animState.player3Hit;
+    const isPlayer4Hit = animState.player4Hit;
 
-    if ((isDealerHit || isPlayerHit || isPlayer3Hit) && (!scene.userData.isLowEndDevice || Math.random() > 0.5)) {
+    if ((isDealerHit || isPlayerHit || isPlayer3Hit || isPlayer4Hit) && (!scene.userData.isLowEndDevice || Math.random() > 0.5)) {
         const bPos = bloodParticles.geometry.attributes.position.array as Float32Array;
         const bVel = bloodParticles.geometry.attributes.velocity.array as Float32Array;
         // Increase spawn rate for more "splash"
@@ -826,6 +831,14 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
                     bPos[i * 3 + 2] = -2.0 + (Math.random() - 0.5) * 1.0;
 
                     bVel[i * 3] = (sidePos === 'left' ? 1 : -1) * (Math.random() * 5.0 + 2.0);
+                    bVel[i * 3 + 1] = Math.random() * 5.0 + 2.0;
+                    bVel[i * 3 + 2] = (Math.random() - 0.5) * 5.0;
+                } else if (isPlayer4Hit) {
+                    bPos[i * 3] = 8 + (Math.random() - 0.5) * 1.5;
+                    bPos[i * 3 + 1] = 3.0 + (Math.random() - 0.5) * 1.5;
+                    bPos[i * 3 + 2] = -2.0 + (Math.random() - 0.5) * 1.0;
+
+                    bVel[i * 3] = -(Math.random() * 5.0 + 2.0);
                     bVel[i * 3 + 1] = Math.random() * 5.0 + 2.0;
                     bVel[i * 3 + 2] = (Math.random() - 0.5) * 5.0;
                 }
@@ -881,7 +894,7 @@ export function updateScene(context: SceneContext, props: SceneProps, time: numb
         updateBlood(bloodParticles, dt);
     }
 
-    if (animState.playerHit || animState.dealerHit || animState.player3Hit) {
+    if (animState.playerHit || animState.dealerHit || animState.player3Hit || animState.player4Hit) {
         bloodParticles.visible = true;
     }
 

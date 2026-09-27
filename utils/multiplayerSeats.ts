@@ -78,9 +78,11 @@ export const replaceSeatLabelsWithPlayerNames = (
   ));
 };
 
-export const aimForOwner = (owner: TurnOwner): AimTarget => {
+export const aimForOwner = (owner: TurnOwner, playerCount: number = 4): AimTarget => {
   if (owner === 'PLAYER') return 'SELF';
-  if (owner === 'PLAYER3') return 'LEFT';
+  // PLAYER3 is the clockwise neighbour. In a three-player layout that seat is
+  // rendered on the right; in a four-player layout it is rendered on the left.
+  if (owner === 'PLAYER3') return playerCount === 3 ? 'RIGHT' : 'LEFT';
   if (owner === 'PLAYER4') return 'RIGHT';
   return 'OPPONENT';
 };
