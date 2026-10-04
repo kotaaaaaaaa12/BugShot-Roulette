@@ -313,6 +313,23 @@ export class GameServer extends Container<Env> {
     NODE_ENV: "production",
     ALLOWED_ORIGINS: this.env.ALLOWED_ORIGINS,
   };
+
+  override onStart(): void {
+    console.log("Game server container started");
+  }
+
+  override onStop(stopParams: { exitCode: number; reason: string }): void {
+    console.log("Game server container stopped", stopParams);
+  }
+
+  override onError(error: unknown): void {
+    console.error("Game server container error", error);
+  }
+
+  override async onActivityExpired(): Promise<void> {
+    console.log("Game server container inactive for 10 minutes; forcing shutdown");
+    await this.destroy();
+  }
 }
 
 export default {
