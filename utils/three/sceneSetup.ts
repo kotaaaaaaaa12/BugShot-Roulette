@@ -337,14 +337,15 @@ export const initThreeScene = (container: HTMLElement, props: any): SceneContext
                 frontOpponent ? frontOpponent.name : 'OPPONENT 1', 4, 4, getModelForSeat('dealer', frontIndex, frontOpponent?.id));
             dealerGroup.name = 'DEALER';
 
-            // Left player -> PLAYER3
-            player3Group = createPlayerAvatar(scene, new THREE.Vector3(-8, -4.5, -2), Math.PI / 2,
+            // Left player -> PLAYER3. Account for the avatar's 180-degree correction
+            // so its final facing direction is toward the table (+X), not the wall.
+            player3Group = createPlayerAvatar(scene, new THREE.Vector3(-8, -4.5, -2), -Math.PI / 2,
                 leftOpponent ? leftOpponent.name : 'OPPONENT 2', 4, 4, getModelForSeat('left', leftIndex, leftOpponent?.id));
             player3Group.name = 'PLAYER3';
             scene.userData.player3Side = 'left';
 
-            // Right player -> PLAYER4
-            player4Group = createPlayerAvatar(scene, new THREE.Vector3(8, -4.5, -2), -Math.PI / 2,
+            // Right player -> PLAYER4. The final facing direction must be -X.
+            player4Group = createPlayerAvatar(scene, new THREE.Vector3(8, -4.5, -2), Math.PI / 2,
                 rightOpponent ? rightOpponent.name : 'OPPONENT 3', 4, 4, getModelForSeat('right', rightIndex, rightOpponent?.id));
             player4Group.name = 'PLAYER4';
             scene.userData.player4Side = 'right';
@@ -374,8 +375,9 @@ export const initThreeScene = (container: HTMLElement, props: any): SceneContext
                 frontOpponent.name, 4, 4, getModelForSeat('dealer', frontIndex, frontOpponent?.id));
             dealerGroup.name = 'DEALER';
 
-            // Side player -> PLAYER3
-            player3Group = createPlayerAvatar(scene, new THREE.Vector3(8, -4.5, -2), -Math.PI / 2,
+            // Side player -> PLAYER3. Use the same inward-facing right seat as
+            // the four-player layout, including the avatar's rotation correction.
+            player3Group = createPlayerAvatar(scene, new THREE.Vector3(8, -4.5, -2), Math.PI / 2,
                 sideOpponent.name, 4, 4, getModelForSeat('right', sideIndex, sideOpponent?.id));
             player3Group.name = 'PLAYER3';
             scene.userData.player3Side = 'right';
