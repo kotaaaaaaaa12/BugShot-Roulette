@@ -13,3 +13,4 @@ ENV PORT=3001
 EXPOSE 3001
 
 CMD ["node", "--import", "./security-preload.mjs", "index.js"]
+LABEL rollout.retry="20261014-1"
